@@ -4,6 +4,7 @@
 // logic without needing a real Zephyr environment.
 
 #include <cassert>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 
@@ -58,26 +59,40 @@ int main() {
     FwSizeType size;
     bool recoverable;
     void* result;
+    const FwSizeType zephyrMallocAlignment = static_cast<FwSizeType>(alignof(void*));
+    FwSizeType stricterAlignment = zephyrMallocAlignment + 1U;
 
-    // Test 1: Default alignment uses k_malloc
-    printf("Test 1: Default alignment -> k_malloc... ");
+    while ((stricterAlignment & (stricterAlignment - 1U)) != 0U) {
+        stricterAlignment++;
+    }
+
+    // Test 1: Default alignment follows Zephyr's documented k_malloc guarantee.
+    printf("Test 1: Default alignment selects the safe API... ");
     reset();
     g_returnPtr = fake_mem;
     size = 64;
     result = alloc.allocate(0, size, recoverable);
-    assert(g_lastCall == CALL_KMALLOC);
-    assert(g_lastSize == 64);
+    const CallType expectedDefaultCall =
+        (alignof(std::max_align_t) <= alignof(void*)) ? CALL_KMALLOC : CALL_KALIGNED;
+    assert(g_lastCall == expectedDefaultCall);
+    if (expectedDefaultCall == CALL_KMALLOC) {
+        assert(g_lastSize == 64);
+    } else {
+        assert(g_lastAlignment == alignof(std::max_align_t));
+        assert(g_lastSize % alignof(std::max_align_t) == 0U);
+        assert(g_lastSize >= 64);
+    }
     assert(result == fake_mem);
     assert(size == 64);
     assert(!recoverable);
     printf("PASS\n");
 
-    // Test 2: Small alignment (== sizeof(void*)) uses k_malloc
-    printf("Test 2: Small alignment -> k_malloc... ");
+    // Test 2: Pointer-size alignment uses k_malloc
+    printf("Test 2: Pointer-size alignment -> k_malloc... ");
     reset();
     g_returnPtr = fake_mem;
     size = 128;
-    result = alloc.allocate(0, size, recoverable, sizeof(void*));
+    result = alloc.allocate(0, size, recoverable, zephyrMallocAlignment);
     assert(g_lastCall == CALL_KMALLOC);
     assert(g_lastSize == 128);
     printf("PASS\n");
@@ -91,15 +106,16 @@ int main() {
     assert(g_lastCall == CALL_KMALLOC);
     printf("PASS\n");
 
-    // Test 4: Large power-of-2 alignment uses k_aligned_alloc
-    printf("Test 4: Large power-of-2 alignment -> k_aligned_alloc... ");
+    // Test 4: Alignments stricter than pointer-size use k_aligned_alloc
+    printf("Test 4: Stricter alignment -> k_aligned_alloc... ");
     reset();
     g_returnPtr = fake_mem;
     size = 256;
-    result = alloc.allocate(0, size, recoverable, 64);
+    result = alloc.allocate(0, size, recoverable, stricterAlignment);
     assert(g_lastCall == CALL_KALIGNED);
-    assert(g_lastSize == 256);
-    assert(g_lastAlignment == 64);
+    assert(g_lastSize % stricterAlignment == 0U);
+    assert(g_lastSize >= 256);
+    assert(g_lastAlignment == stricterAlignment);
     assert(result == fake_mem);
     printf("PASS\n");
 
@@ -137,14 +153,20 @@ int main() {
     assert(g_lastSize == 64);
     printf("PASS\n");
 
-    // Test 7b: Alignment at alignof(max_align_t) threshold uses k_malloc
-    printf("Test 7b: Alignment == alignof(max_align_t) -> k_malloc... ");
+    // Test 7b: max_align_t follows the same safe threshold logic as default allocation
+    printf("Test 7b: Alignment == alignof(max_align_t) uses safe API... ");
     reset();
     g_returnPtr = fake_mem;
     size = 100;
     result = alloc.allocate(0, size, recoverable, alignof(std::max_align_t));
-    assert(g_lastCall == CALL_KMALLOC);
-    assert(g_lastSize == 100);
+    assert(g_lastCall == expectedDefaultCall);
+    if (expectedDefaultCall == CALL_KMALLOC) {
+        assert(g_lastSize == 100);
+    } else {
+        assert(g_lastAlignment == alignof(std::max_align_t));
+        assert(g_lastSize % alignof(std::max_align_t) == 0U);
+        assert(g_lastSize >= 100);
+    }
     printf("PASS\n");
 
     // Test 8: Zero alignment treated as 1, uses k_malloc

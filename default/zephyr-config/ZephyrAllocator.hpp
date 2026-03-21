@@ -5,6 +5,8 @@
 #ifndef CONFIG_ZEPHYR_ALLOCATOR_HPP
 #define CONFIG_ZEPHYR_ALLOCATOR_HPP
 
+#include <cstddef>
+
 #include <Fw/Types/MemAllocator.hpp>
 #include <zephyr/kernel.h>
 
@@ -38,12 +40,10 @@ class ZephyrKmallocAllocator final : public MemAllocator {
             safeAlignment++;
         }
 
-        // Use k_malloc for default/small alignments (simpler, no over-allocation).
-        // Use k_aligned_alloc only when a larger alignment is explicitly requested.
-        // On 32-bit ARM sizeof(void*)==4 but alignof(max_align_t)==8, so the old
-        // sizeof(void*) threshold routed every default allocation through
-        // k_aligned_alloc, which can freeze the board.
-        const FwSizeType minAlignment = static_cast<FwSizeType>(alignof(std::max_align_t));
+        // Zephyr documents k_malloc as only guaranteeing pointer-size alignment.
+        // Route stricter requests through k_aligned_alloc so fprime's alignment
+        // contract remains valid on 32-bit targets where max_align_t > void*.
+        const FwSizeType minAlignment = static_cast<FwSizeType>(alignof(void*));
         void* memory = nullptr;
         if (safeAlignment <= minAlignment) {
             memory = k_malloc(static_cast<size_t>(size));
