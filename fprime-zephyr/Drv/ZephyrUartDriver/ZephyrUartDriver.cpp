@@ -47,7 +47,10 @@ namespace Zephyr {
         uart_configure(this->m_dev, &uart_cfg);
 
         ring_buf_init(&this->m_ring_buf, RING_BUF_SIZE, this->m_ring_buf_data);
-        uart_irq_callback_user_data_set(this->m_dev, serial_cb, &this->m_ring_buf);
+        this->m_rx_paused = false;
+        // Pass the driver instance (not just the ring) so the RX ISR can pause
+        // itself for flow control by touching m_rx_paused / disabling the RX IRQ.
+        uart_irq_callback_user_data_set(this->m_dev, serial_cb, this);
 
         uart_irq_rx_enable(this->m_dev);
 	    uart_irq_tx_disable(this->m_dev);
@@ -59,7 +62,7 @@ namespace Zephyr {
 
     void ZephyrUartDriver::serial_cb(const struct device *dev, void *user_data)
     {
-        struct ring_buf *ring_buf = reinterpret_cast<struct ring_buf *>(user_data);
+        ZephyrUartDriver *drv = reinterpret_cast<ZephyrUartDriver *>(user_data);
 
         if (!uart_irq_update(dev)) {
             return;
@@ -69,13 +72,26 @@ namespace Zephyr {
             return;
         }
 
+        // Drain the hardware FIFO into the ring, but only while the ring has
+        // room. When it fills, stop reading and disable the RX IRQ so the
+        // USB-CDC/UART layer back-pressures the host (NAKs the bulk-OUT
+        // endpoint) instead of us dropping bytes. schedIn re-enables RX once it
+        // drains the ring. This is the flow control that bounds a fast host
+        // (GDS) to the slow LoRa egress: LoRa slow -> pool full -> ring full ->
+        // RX paused -> host blocks. Without it, a multi-KB host burst overruns
+        // the ring and the dropped bytes corrupt the raw byte-stream
+        // passthrough to LoRa (every downstream frame then fails flight auth).
         U8 c;
-        // TODO: Get rid of the endless loop (in an IRQ handler!).
-        while (uart_fifo_read(dev, &c, 1) == 1) {
-            if (ring_buf_put(ring_buf, &c, 1) != 1) {
-                // TODO: Handle properly.
-                printk("UART buffer overrun\n");
+        while (ring_buf_space_get(&drv->m_ring_buf) > 0) {
+            if (uart_fifo_read(dev, &c, 1) != 1) {
+                break;  // FIFO drained; nothing more to read right now
             }
+            // Space was just confirmed, so this put cannot fail.
+            (void)ring_buf_put(&drv->m_ring_buf, &c, 1);
+        }
+        if (ring_buf_space_get(&drv->m_ring_buf) == 0) {
+            uart_irq_rx_disable(dev);
+            drv->m_rx_paused = true;
         }
     }
 
@@ -98,6 +114,16 @@ namespace Zephyr {
         } else {
             recv_buffer.setSize(recv_size);
             recv_out(0, recv_buffer, Drv::ByteStreamStatus::OP_OK);
+        }
+
+        // If the RX ISR paused itself for back-pressure (ring was full) and we
+        // have since freed room, resume reading. Note pool exhaustion can leave
+        // the ring full across ticks (allocate_out returns empty -> recv_size 0);
+        // RX simply stays paused until LoRa drains the pool, which is exactly the
+        // back-pressure we want.
+        if (this->m_rx_paused && ring_buf_space_get(&this->m_ring_buf) > 0) {
+            this->m_rx_paused = false;
+            uart_irq_rx_enable(this->m_dev);
         }
     }
 
