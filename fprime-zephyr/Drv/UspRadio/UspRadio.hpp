@@ -35,10 +35,17 @@ class UspRadio final : public UspRadioComponentBase {
     // Construction / destruction
     // ----------------------------------------------------------------------
 
-    UspRadio(const char* compName, RalSession& session);
+    //! Construct with compName only.  Call configure() before start().
+    explicit UspRadio(const char* compName);
     ~UspRadio() override;
 
-    //! Initialize and start the radio.  Must be called after component wiring.
+    //! Inject the RalSession implementation (must be called before start()).
+    //! Allows the FPP autocoder to instantiate the component without knowing
+    //! the concrete session type (which is on-target only).
+    void configure(RalSession& session);
+
+    //! Initialize and start the radio.  Must be called after configure() and
+    //! after component wiring is complete.
     //! Calls session.init(), applyProfile(boot default), session.startReceive().
     //! @returns true on success.
     bool start(UspTransmitState initialTransmitState = UspTransmitState::DISABLED);
@@ -118,7 +125,7 @@ class UspRadio final : public UspRadioComponentBase {
     // ----------------------------------------------------------------------
     // State
     // ----------------------------------------------------------------------
-    RalSession&       m_session;
+    RalSession*       m_session;  //!< Injected via configure(); never null after start()
     ProfilePolicy     m_policy;
     UspTransmitState  m_transmitState;
 
