@@ -26,7 +26,9 @@
 
 #include "fprime-zephyr/Drv/UspRadio/RalSessionImpl.hpp"
 #include "fprime-zephyr/Drv/UspRadio/LinkProfiles.hpp"
-#include "zephyr-config/LoRaCfg.hpp"
+// NOTE: LoRaCfg.hpp is intentionally NOT included here.  RalSessionImpl
+// receives freq_hz / tx_power_dbm through its constructor; it does not use
+// the Zephyr LoRa driver header (which requires CONFIG_LORA=y — absent on v5e).
 
 #include <Fw/Logger/Logger.hpp>
 #include <zephyr/kernel.h>

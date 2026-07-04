@@ -84,6 +84,7 @@ class RalSessionImpl final : public RalSession {
     static void onRxDone(void* ctx);  //!< post-transaction callback for received frame
 
     // Internal helpers (called from within RAC lock window)
+    bool applyLoRa_or_Gfsk(const LinkProfile& p);
     int applyLoRa(const LoRaParams& p);
     int applyGfsk(const GfskParams& p);
 
