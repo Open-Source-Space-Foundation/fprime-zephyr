@@ -32,9 +32,9 @@ namespace Zephyr {
 // Construction
 // ---------------------------------------------------------------------------
 
-UspRadio::UspRadio(const char* compName, RalSession& session)
+UspRadio::UspRadio(const char* compName)
     : UspRadioComponentBase(compName),
-      m_session(session),
+      m_session(nullptr),
       m_policy(),
       m_transmitState(UspTransmitState::DISABLED),
       m_rxScratchLen(0),
@@ -46,6 +46,10 @@ UspRadio::UspRadio(const char* compName, RalSession& session)
 
 UspRadio::~UspRadio() {}
 
+void UspRadio::configure(RalSession& session) {
+    m_session = &session;
+}
+
 // ---------------------------------------------------------------------------
 // start()
 // ---------------------------------------------------------------------------
@@ -54,14 +58,14 @@ bool UspRadio::start(UspTransmitState initialTransmitState) {
     m_transmitState = initialTransmitState;
 
     // Register RX callback (fires on USP thread → posts internal msg)
-    m_session.setCallbacks(
+    m_session->setCallbacks(
         [this](const uint8_t* data, std::size_t size, int16_t rssi, int8_t snr) {
             this->onRxDone(data, size, rssi, snr);
         },
         []() {}  // TX done: no action needed beyond the sem in RalSessionImpl
     );
 
-    if (m_session.init() != 0) {
+    if (m_session->init() != 0) {
         Fw::Logger::log("[UspRadio] session.init() failed\n");
         return false;
     }
@@ -74,7 +78,7 @@ bool UspRadio::start(UspTransmitState initialTransmitState) {
         return false;
     }
 
-    if (m_session.startReceive() != 0) {
+    if (m_session->startReceive() != 0) {
         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
         return false;
     }
@@ -123,7 +127,7 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
 
         // Apply the reverted profile to the radio hardware
         (void)applyProfile(toProfile, UspRadioDirection::RX);
-        if (m_session.startReceive() != 0) {
+        if (m_session->startReceive() != 0) {
             this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
         }
 
@@ -198,7 +202,7 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             size = MAX_PACKET_SIZE;  // truncate; Phase 5 will validate framing
         }
 
-        int rc = m_session.transmitPacket(data.getData(), static_cast<std::size_t>(size));
+        int rc = m_session->transmitPacket(data.getData(), static_cast<std::size_t>(size));
         if (rc != 0) {
             this->log_WARNING_HI_SendFailed(static_cast<I32>(rc));
             returnStatus = Fw::Success::FAILURE;
@@ -211,7 +215,7 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         }
 
         // Re-arm continuous RX after TX
-        if (m_session.startReceive() != 0) {
+        if (m_session->startReceive() != 0) {
             this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
         }
     } else if (m_transmitState == UspTransmitState::DISABLING) {
@@ -275,7 +279,7 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
     if (!applyProfile(idx, UspRadioDirection::RX)) {
         return;
     }
-    if (m_session.startReceive() != 0) {
+    if (m_session->startReceive() != 0) {
         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
     }
     this->log_ACTIVITY_HI_ProfileChanged(UspRadioDirection::RX, profile);
@@ -291,7 +295,7 @@ void UspRadio::deferredContinuousWave_internalInterfaceHandler(U16 seconds) {
     U8 txIdx = m_policy.txProfile();
     const LinkProfile& cwProfile = LINK_PROFILE_TABLE[txIdx];
 
-    int rc = m_session.startCw(cwProfile);
+    int rc = m_session->startCw(cwProfile);
     if (rc != 0) {
         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::TX);
         return;
@@ -310,12 +314,12 @@ void UspRadio::deferredContinuousWave_internalInterfaceHandler(U16 seconds) {
 #endif
 
     // Stop CW and return to RX
-    (void)m_session.stopRadio();
+    (void)m_session->stopRadio();
 
     // Re-apply current RX profile and restart receive
     U8 rxIdx = m_policy.rxProfile();
     (void)applyProfile(rxIdx, UspRadioDirection::RX);
-    if (m_session.startReceive() != 0) {
+    if (m_session->startReceive() != 0) {
         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
     }
 }
@@ -354,7 +358,7 @@ bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction) {
         return false;
     }
     const LinkProfile& p = LINK_PROFILE_TABLE[idx];
-    int rc = m_session.applyProfile(p);
+    int rc = m_session->applyProfile(p);
     if (rc != 0) {
         this->log_WARNING_HI_ConfigurationFailed(direction);
         return false;
