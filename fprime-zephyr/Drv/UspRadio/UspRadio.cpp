@@ -51,10 +51,10 @@ void UspRadio::configure(RalSession& session) {
 }
 
 // ---------------------------------------------------------------------------
-// start()
+// startRadio()
 // ---------------------------------------------------------------------------
 
-bool UspRadio::start(UspTransmitState initialTransmitState) {
+bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
     m_transmitState = initialTransmitState;
 
     // Register RX callback (fires on USP thread → posts internal msg)

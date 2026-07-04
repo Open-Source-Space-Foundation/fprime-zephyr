@@ -45,10 +45,11 @@ class UspRadio final : public UspRadioComponentBase {
     void configure(RalSession& session);
 
     //! Initialize and start the radio.  Must be called after configure() and
-    //! after component wiring is complete.
+    //! after component wiring is complete (and after the F' task start() call).
     //! Calls session.init(), applyProfile(boot default), session.startReceive().
+    //! Named startRadio() to avoid clashing with ActiveComponentBase::start().
     //! @returns true on success.
-    bool start(UspTransmitState initialTransmitState = UspTransmitState::DISABLED);
+    bool startRadio(UspTransmitState initialTransmitState = UspTransmitState::DISABLED);
 
     //! Called by the RalSession RX callback (runs on USP thread).
     //! Posts a deferredRxDone internal message; does NOT touch F´ ports directly.
