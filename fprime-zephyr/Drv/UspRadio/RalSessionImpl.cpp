@@ -20,6 +20,11 @@
 //   CW runs as a single RAC lock window; the k_timer stop is scheduled
 //   from outside that window (from the F' component thread) and calls
 //   stopRadio() which acquires its own lock window.
+//
+// Callback design (2025 RAC API):
+//   smtc_rac_scheduler_config_t callbacks carry NO context pointer.
+//   All state is accessed via the file-scope s_instance singleton.
+//   Only one RalSessionImpl may be active at a time (enforced by topology).
 // ======================================================================
 
 #ifdef CONFIG_LORA_BASICS_MODEM_DRIVERS
@@ -34,11 +39,27 @@
 #include <zephyr/kernel.h>
 
 // Pull in USP RAL pulse-shape / CRC enums
+// (smtc_rac_lib/smtc_ral/src is in the include path; include as <ral_defs.h>)
 extern "C" {
-#include <smtc_ral/src/ral_defs.h>
+#include <ral_defs.h>
 }
 
+// smtc_modem_hal_get_time_in_ms is implemented in the usp_zephyr module as
+// k_uptime_get_32().  Its header is not on the public include path, so we
+// either forward-declare it or use k_uptime_get_32() directly.  Using
+// k_uptime_get_32() is simpler and avoids a private-header dependency.
+//
+// The RAC scheduler_config.start_time_ms comment says:
+//   "set smtc_modem_hal_get_time_in_ms() if you want NOW"
+// k_uptime_get_32() is precisely that — same implementation.
+
 namespace Zephyr {
+
+// ---------------------------------------------------------------------------
+// Singleton pointer — set in init(), read by static trampolines
+// ---------------------------------------------------------------------------
+
+RalSessionImpl* RalSessionImpl::s_instance = nullptr;
 
 // ---------------------------------------------------------------------------
 // Constructor
@@ -47,12 +68,15 @@ namespace Zephyr {
 RalSessionImpl::RalSessionImpl(uint32_t freq_hz, int8_t tx_power_dbm)
     : m_freq_hz(freq_hz),
       m_tx_power_dbm(tx_power_dbm),
+      m_radio_id(RAC_INVALID_RADIO_ID),
       m_ral(nullptr),
       m_ralf(nullptr),
       m_initialized(false),
       m_rxLen(0),
       m_rxRssi(0),
       m_rxSnr(0) {
+    m_txScratch = {};
+    m_applyScratch = {};
     k_sem_init(&m_txDoneSem, 0, 1);
     k_sem_init(&m_cwDoneSem, 0, 1);
 }
@@ -71,19 +95,23 @@ void RalSessionImpl::setCallbacks(RxDoneCallback rxDone, TxDoneCallback txDone) 
 // ---------------------------------------------------------------------------
 
 int RalSessionImpl::init() {
-    // Wait for the USP thread to complete its boot sequence.
-    int rc = zephyr_usp_initialization_wait();
-    if (rc != 0) {
-        Fw::Logger::log("[UspRadio] USP init wait failed: %d\n", rc);
-        return rc;
+    // Wait for the USP thread to complete its boot sequence (void return).
+    zephyr_usp_initialization_wait();
+
+    // zephyr_usp_thread.c intentionally does NOT call smtc_rac_init() (it is
+    // commented out in the upstream source).  We call smtc_rac_init() directly
+    // from the RAC public API.  Note: zephyr_smtc_rac_init() is declared in the
+    // USP Zephyr header but has no implementation — call smtc_rac_init() directly.
+    smtc_rac_init();
+
+    // Open a persistent radio access session at high priority.
+    m_radio_id = smtc_rac_open_radio(RAC_HIGH_PRIORITY);
+    if (m_radio_id == RAC_INVALID_RADIO_ID) {
+        Fw::Logger::log("[UspRadio] smtc_rac_open_radio() returned INVALID_ID\n");
+        return -ENODEV;
     }
 
-    // zephyr_usp_thread.c intentionally does NOT call smtc_rac_init().
-    // We must call it here via the Zephyr wrapper (REPORT-ral-architecture §Init).
-    zephyr_smtc_rac_init();
-
     // Obtain the ral_t* via the RALF abstraction that USP provides.
-    // smtc_rac_get_radio() returns the ralf_t*; ral_from_ralf() gives ral_t*.
     m_ralf = smtc_rac_get_radio();
     if (m_ralf == nullptr) {
         Fw::Logger::log("[UspRadio] smtc_rac_get_radio() returned null\n");
@@ -95,6 +123,9 @@ int RalSessionImpl::init() {
     ral_reset(m_ral);
     ral_init(m_ral);
 
+    // Register singleton for static callback trampolines
+    s_instance = this;
+
     m_initialized = true;
     Fw::Logger::log("[UspRadio] RAL session initialized (freq=%" PRIu32 " Hz, pwr=%" PRId8 " dBm)\n",
                     m_freq_hz, m_tx_power_dbm);
@@ -105,27 +136,7 @@ int RalSessionImpl::init() {
 // applyProfile() — translates LinkProfile → RAL calls inside a lock window
 // ---------------------------------------------------------------------------
 
-namespace {
-// Trampoline payload for applyProfile lock window
-struct ApplyCtx {
-    RalSessionImpl* self;
-    const LinkProfile* profile;
-    int result;
-};
-
-static void onPreApply(void* raw) {
-    auto* ctx = static_cast<ApplyCtx*>(raw);
-    if (ctx->self->applyLoRa_or_Gfsk(*ctx->profile)) {
-        ctx->result = 0;
-    } else {
-        ctx->result = -EIO;
-    }
-    // Unlock immediately — we don't need to hold through a TX/RX
-    smtc_rac_unlock_radio_access();
-}
-}  // namespace
-
-// Helper called from within the RAC lock window
+// Helper called from within the RAC lock window (static trampoline lands here)
 bool RalSessionImpl::applyLoRa_or_Gfsk(const LinkProfile& p) {
     if (p.mod == ModKind::LORA) {
         return applyLoRa(p.lora) == 0;
@@ -134,20 +145,39 @@ bool RalSessionImpl::applyLoRa_or_Gfsk(const LinkProfile& p) {
     }
 }
 
-int RalSessionImpl::applyProfile(const LinkProfile& profile) {
-    ApplyCtx ctx{this, &profile, -ENODEV};
+void RalSessionImpl::onPreApply(void) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
 
-    smtc_rac_lock_radio_access_t lock_cfg = {
-        .callback_pre_radio_transaction  = onPreApply,
-        .callback_post_radio_transaction = nullptr,
-        .context                         = &ctx,
-        .transaction_type                = SMTC_RAC_ASAP_TRANSACTION,
-    };
-    int rc = smtc_rac_lock_radio_access(&lock_cfg);
-    if (rc != 0) {
-        return rc;
+    if (self->applyLoRa_or_Gfsk(*self->m_applyScratch.profile)) {
+        self->m_applyScratch.result = 0;
+    } else {
+        self->m_applyScratch.result = -EIO;
     }
-    return ctx.result;
+    // Unlock immediately — we don't need to hold through a TX/RX
+    smtc_rac_unlock_radio_access(self->m_radio_id);
+}
+
+void RalSessionImpl::onPostApply(rp_status_t /*status*/) {
+    // Nothing to do — result was set in onPreApply and unlock was called there.
+    // The post-callback fires after the unlock with RP_STATUS_TASK_UNLOCKED.
+}
+
+int RalSessionImpl::applyProfile(const LinkProfile& profile) {
+    m_applyScratch.profile = &profile;
+    m_applyScratch.result  = -ENODEV;
+
+    smtc_rac_scheduler_config_t cfg = {};
+    cfg.start_time_ms                  = k_uptime_get_32();
+    cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
+    cfg.callback_pre_radio_transaction  = onPreApply;
+    cfg.callback_post_radio_transaction = onPostApply;
+
+    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
+    if (rc != SMTC_RAC_SUCCESS) {
+        return -EIO;
+    }
+    return m_applyScratch.result;
 }
 
 int RalSessionImpl::applyLoRa(const LoRaParams& p) {
@@ -230,9 +260,9 @@ int RalSessionImpl::applyGfsk(const GfskParams& p) {
 // startReceive()
 // ---------------------------------------------------------------------------
 
-void RalSessionImpl::onPreRx(void* raw) {
-    auto* ctx = static_cast<RxContext*>(raw);
-    RalSessionImpl* self = ctx->self;
+void RalSessionImpl::onPreRx(void) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
 
     ral_set_dio_irq_params(self->m_ral,
         RAL_IRQ_RX_DONE | RAL_IRQ_RX_TIMEOUT | RAL_IRQ_RX_CRC_ERROR);
@@ -244,16 +274,16 @@ void RalSessionImpl::onPreRx(void* raw) {
     //  until stopRadio() is called or a frame arrives.)
 }
 
-void RalSessionImpl::onRxDone(void* raw) {
-    auto* ctx = static_cast<RxContext*>(raw);
-    RalSessionImpl* self = ctx->self;
+void RalSessionImpl::onPostRx(rp_status_t /*status*/) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
 
     // Read IRQ status
     ral_irq_t irq = RAL_IRQ_NONE;
     ral_get_and_clear_irq_status(self->m_ral, &irq);
 
     if ((irq & RAL_IRQ_RX_DONE) && !(irq & RAL_IRQ_RX_CRC_ERROR)) {
-        uint8_t buf[MAX_RX_BUF];
+        uint8_t  buf[MAX_RX_BUF];
         uint16_t len = 0;
 
         ral_handle_rx_done(self->m_ral);
@@ -265,8 +295,7 @@ void RalSessionImpl::onRxDone(void* raw) {
         int16_t rssi = 0;
         int8_t  snr  = 0;
 
-        // Determine pkt type from current mod state (stored in self)
-        // We try LoRa first; if that fails try GFSK
+        // Try LoRa first; fall back to GFSK
         if (ral_get_lora_rx_pkt_status(self->m_ral, &lora_status) == RAL_STATUS_OK) {
             rssi = static_cast<int16_t>(lora_status.rssi_pkt_in_dbm);
             snr  = static_cast<int8_t>(lora_status.snr_pkt_in_db);
@@ -286,48 +315,47 @@ void RalSessionImpl::onRxDone(void* raw) {
 }
 
 int RalSessionImpl::startReceive() {
-    static RxContext ctx;  // static: lifetime >= the RAC transaction
-    ctx.self = this;
+    smtc_rac_scheduler_config_t cfg = {};
+    cfg.start_time_ms                  = k_uptime_get_32();
+    cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
+    cfg.callback_pre_radio_transaction  = onPreRx;
+    cfg.callback_post_radio_transaction = onPostRx;
 
-    smtc_rac_lock_radio_access_t lock_cfg = {
-        .callback_pre_radio_transaction  = onPreRx,
-        .callback_post_radio_transaction = onRxDone,
-        .context                         = &ctx,
-        .transaction_type                = SMTC_RAC_ASAP_TRANSACTION,
-    };
-    return smtc_rac_lock_radio_access(&lock_cfg);
+    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
+    return (rc == SMTC_RAC_SUCCESS) ? 0 : -EIO;
 }
 
 // ---------------------------------------------------------------------------
 // transmitPacket()
 // ---------------------------------------------------------------------------
 
-void RalSessionImpl::onPreTx(void* raw) {
-    auto* ctx = static_cast<TxContext*>(raw);
-    RalSessionImpl* self = ctx->self;
+void RalSessionImpl::onPreTx(void) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
 
     // Set payload
-    if (ral_set_pkt_payload(self->m_ral, ctx->data,
-                            static_cast<uint16_t>(ctx->size)) != RAL_STATUS_OK) {
-        ctx->result = -EIO;
-        smtc_rac_unlock_radio_access();
+    if (ral_set_pkt_payload(self->m_ral,
+                            self->m_txScratch.data,
+                            static_cast<uint16_t>(self->m_txScratch.size)) != RAL_STATUS_OK) {
+        self->m_txScratch.result = -EIO;
+        smtc_rac_unlock_radio_access(self->m_radio_id);
         return;
     }
     // IRQ: TX_DONE only
     ral_set_dio_irq_params(self->m_ral, RAL_IRQ_TX_DONE);
     // Start TX
     if (ral_set_tx(self->m_ral) != RAL_STATUS_OK) {
-        ctx->result = -EIO;
-        smtc_rac_unlock_radio_access();
+        self->m_txScratch.result = -EIO;
+        smtc_rac_unlock_radio_access(self->m_radio_id);
         return;
     }
-    ctx->result = 0;
+    self->m_txScratch.result = 0;
     // Lock stays held until TX_DONE IRQ fires → post-callback runs
 }
 
-static void onPostTx(void* raw) {
-    auto* ctx = static_cast<RalSessionImpl::TxContext*>(raw);
-    RalSessionImpl* self = ctx->self;
+void RalSessionImpl::onPostTx(rp_status_t /*status*/) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
 
     ral_irq_t irq = RAL_IRQ_NONE;
     ral_get_and_clear_irq_status(self->m_ral, &irq);
@@ -339,21 +367,23 @@ static void onPostTx(void* raw) {
 }
 
 int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
-    TxContext ctx{this, data, size, 0};
+    m_txScratch.data   = data;
+    m_txScratch.size   = size;
+    m_txScratch.result = 0;
 
-    smtc_rac_lock_radio_access_t lock_cfg = {
-        .callback_pre_radio_transaction  = onPreTx,
-        .callback_post_radio_transaction = onPostTx,
-        .context                         = &ctx,
-        .transaction_type                = SMTC_RAC_ASAP_TRANSACTION,
-    };
-    int rc = smtc_rac_lock_radio_access(&lock_cfg);
-    if (rc != 0) return rc;
+    smtc_rac_scheduler_config_t cfg = {};
+    cfg.start_time_ms                  = k_uptime_get_32();
+    cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
+    cfg.callback_pre_radio_transaction  = onPreTx;
+    cfg.callback_post_radio_transaction = onPostTx;
+
+    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
+    if (rc != SMTC_RAC_SUCCESS) return -EIO;
 
     // Block the component thread until TX_DONE IRQ (signalled via semaphore
     // in onPostTx).  Timeout: conservatively 10 s (longest LoRa symbol airtime).
-    rc = k_sem_take(&m_txDoneSem, K_SECONDS(10));
-    return (rc == 0) ? ctx.result : -ETIMEDOUT;
+    int ret = k_sem_take(&m_txDoneSem, K_SECONDS(10));
+    return (ret == 0) ? m_txScratch.result : -ETIMEDOUT;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,9 +393,9 @@ int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
 // CW requires: pkt_type + freq + power configured FIRST, then ral_set_tx_cw().
 // (REPORT-ral-architecture gotcha #4)
 
-void RalSessionImpl::onPreCw(void* raw) {
-    auto* ctx = static_cast<CwContext*>(raw);
-    RalSessionImpl* self = ctx->self;
+void RalSessionImpl::onPreCw(void) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
 
     // CW always uses LoRa packet type regardless of profile modulation
     ral_set_pkt_type(self->m_ral, RAL_PKT_TYPE_LORA);
@@ -379,46 +409,43 @@ void RalSessionImpl::onPreCw(void* raw) {
 }
 
 int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
-    CwContext ctx{this};
+    smtc_rac_scheduler_config_t cfg = {};
+    cfg.start_time_ms                  = k_uptime_get_32();
+    cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
+    cfg.callback_pre_radio_transaction  = onPreCw;
+    // CW holds the lock until stopRadio() calls smtc_rac_unlock_radio_access.
+    // A no-op post callback is required (must not be NULL per API docs).
+    cfg.callback_post_radio_transaction = [](rp_status_t) {};
 
-    smtc_rac_lock_radio_access_t lock_cfg = {
-        .callback_pre_radio_transaction  = onPreCw,
-        .callback_post_radio_transaction = nullptr,
-        .context                         = &ctx,
-        .transaction_type                = SMTC_RAC_ASAP_TRANSACTION,
-    };
-    int rc = smtc_rac_lock_radio_access(&lock_cfg);
-    if (rc != 0) return rc;
+    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
+    if (rc != SMTC_RAC_SUCCESS) return -EIO;
     // Wait until the CW pre-callback has run (and CW is actually transmitting)
-    rc = k_sem_take(&m_cwDoneSem, K_SECONDS(2));
-    return (rc == 0) ? 0 : -ETIMEDOUT;
+    int ret = k_sem_take(&m_cwDoneSem, K_SECONDS(2));
+    return (ret == 0) ? 0 : -ETIMEDOUT;
 }
 
 // ---------------------------------------------------------------------------
 // stopRadio()
 // ---------------------------------------------------------------------------
 
-namespace {
-struct StopCtx {
-    RalSessionImpl* self;
-};
+void RalSessionImpl::onPreStop(void) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
 
-static void onPreStop(void* raw) {
-    auto* ctx = static_cast<StopCtx*>(raw);
-    ral_set_standby(ctx->self->m_ral, RAL_STANDBY_CFG_RC);
-    smtc_rac_unlock_radio_access();
+    ral_set_standby(self->m_ral, RAL_STANDBY_CFG_RC);
+    smtc_rac_unlock_radio_access(self->m_radio_id);
 }
-}  // namespace
 
 int RalSessionImpl::stopRadio() {
-    StopCtx ctx{this};
-    smtc_rac_lock_radio_access_t lock_cfg = {
-        .callback_pre_radio_transaction  = onPreStop,
-        .callback_post_radio_transaction = nullptr,
-        .context                         = &ctx,
-        .transaction_type                = SMTC_RAC_ASAP_TRANSACTION,
-    };
-    return smtc_rac_lock_radio_access(&lock_cfg);
+    smtc_rac_scheduler_config_t cfg = {};
+    cfg.start_time_ms                  = k_uptime_get_32();
+    cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
+    cfg.callback_pre_radio_transaction  = onPreStop;
+    // No-op post callback required (must not be NULL per API docs).
+    cfg.callback_post_radio_transaction = [](rp_status_t) {};
+
+    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
+    return (rc == SMTC_RAC_SUCCESS) ? 0 : -EIO;
 }
 
 }  // namespace Zephyr
