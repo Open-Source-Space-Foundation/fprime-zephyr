@@ -267,6 +267,19 @@ int RalSessionImpl::applyGfsk(const GfskParams& p) {
     // 4. Sync word
     if (ral_set_gfsk_sync_word(m_ral, p.sync_word, p.sync_word_len) != RAL_STATUS_OK) return -EIO;
 
+    // 4b. CRC seed/polynomial (must be set after pkt_params; not set by ral_set_gfsk_pkt_params).
+    //     Standard CCITT values — matches Phase-0 known-good reference (app_per_fsk.h defaults).
+    //     seed=0x1D0F, polynomial=0x1021 for RAL_GFSK_CRC_2_BYTES (non-inverted).
+    if (pkt.crc_type != RAL_GFSK_CRC_OFF) {
+        if (ral_set_gfsk_crc_params(m_ral, 0x1D0FU, 0x1021U) != RAL_STATUS_OK) return -EIO;
+    }
+
+    // 4c. Whitening seed (must be set after pkt_params; not set by ral_set_gfsk_pkt_params).
+    //     Standard value 0x01FF — matches Phase-0 known-good reference.
+    if (p.whitening) {
+        if (ral_set_gfsk_whitening_seed(m_ral, 0x01FFU) != RAL_STATUS_OK) return -EIO;
+    }
+
     // 5. Frequency + PA config
     if (ral_set_rf_freq(m_ral, m_freq_hz) != RAL_STATUS_OK) return -EIO;
     if (ral_set_tx_cfg(m_ral, m_tx_power_dbm, 0) != RAL_STATUS_OK) return -EIO;
