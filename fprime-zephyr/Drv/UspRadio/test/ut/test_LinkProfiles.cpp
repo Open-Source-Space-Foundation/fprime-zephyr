@@ -71,8 +71,10 @@ TEST(LinkProfiles, P0_Preamble8) {
 }
 
 TEST(LinkProfiles, P0_PrivateSyncWord) {
-    // 0x1424 is the SX126x private-network sync word (loramac-node default)
-    EXPECT_EQ(LINK_PROFILE_TABLE[0].lora.sync_word, 0x1424u);
+    // 0x12 is the private-network sync word (1-byte convention matching GRC loramac-node).
+    // ral_set_lora_sync_word(uint8_t) takes this value; the SX126x chip driver
+    // computes the 2-byte register encoding 0x1424 internally.
+    EXPECT_EQ(LINK_PROFILE_TABLE[0].lora.sync_word, 0x12u);
 }
 
 TEST(LinkProfiles, P0_LdroOff) {

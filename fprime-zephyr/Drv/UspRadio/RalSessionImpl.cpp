@@ -218,8 +218,9 @@ int RalSessionImpl::applyLoRa(const LoRaParams& p) {
     pkt.invert_iq_is_on      = false;
     if (ral_set_lora_pkt_params(m_ral, &pkt) != RAL_STATUS_OK) return -EIO;
 
-    // 4. Sync word
-    if (ral_set_lora_sync_word(m_ral, p.sync_word) != RAL_STATUS_OK) return -EIO;
+    // 4. Sync word (1-byte convention: 0x12 = private, 0x34 = public;
+    //    ral_set_lora_sync_word takes uint8_t; LinkProfiles stores the value in U16)
+    if (ral_set_lora_sync_word(m_ral, static_cast<uint8_t>(p.sync_word)) != RAL_STATUS_OK) return -EIO;
 
     // 5. Frequency + PA config
     if (ral_set_rf_freq(m_ral, m_freq_hz) != RAL_STATUS_OK) return -EIO;
