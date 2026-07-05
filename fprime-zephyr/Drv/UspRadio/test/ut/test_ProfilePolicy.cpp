@@ -157,6 +157,9 @@ TEST(ProfilePolicy, Tick_AtDeadline_ReturnsRevert) {
     EXPECT_EQ(p.rxProfile(), BOOT_DEFAULT_PROFILE);
     EXPECT_FALSE(p.hasPendingRx());
     EXPECT_EQ(p.revertCount(), 1u);
+    // pendingRxProfile() must still hold the pre-revert "from" profile (P2=2)
+    // so callers can log "ProfileReverted from P2 to P0" correctly.
+    EXPECT_EQ(p.pendingRxProfile(), 2u);
 }
 
 TEST(ProfilePolicy, Tick_AfterDeadline_ReturnsRevert) {
