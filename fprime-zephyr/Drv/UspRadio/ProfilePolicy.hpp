@@ -102,7 +102,9 @@ class ProfilePolicy {
     // ------------------------------------------------------------------
     U8 txProfile()      const { return m_txProfile; }
     U8 rxProfile()      const { return m_rxProfile; }      //!< The committed RX profile
-    U8 pendingRxProfile() const { return m_pendingRxProfile; }  //!< Profile awaiting confirm
+    //!< Profile awaiting confirmation (or, after kRevert, the profile that was
+    //!< pending before the revert — valid to read as "from" in ProfileReverted).
+    U8 pendingRxProfile() const { return m_pendingRxProfile; }
     bool hasPendingRx() const { return m_hasPendingRx; }
     U32 revertCount()   const { return m_revertCount; }
 

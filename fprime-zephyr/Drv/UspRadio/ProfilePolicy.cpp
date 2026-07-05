@@ -62,8 +62,11 @@ ProfilePolicy::Action ProfilePolicy::tick(uint64_t nowMs) {
         return Action::kNoOp;
     }
     if (nowMs >= m_revertDeadlineMs) {
-        // Revert to boot default
-        m_pendingRxProfile = m_rxProfile;  // save "from" for the event
+        // Revert to boot default.
+        // m_pendingRxProfile holds the pending (non-committed) profile (e.g. P1).
+        // After revert, m_rxProfile = BOOT_DEFAULT.  We leave m_pendingRxProfile
+        // intact so callers can read pendingRxProfile() to get the "from" value
+        // for the ProfileReverted log message before clearing state.
         m_rxProfile = BOOT_DEFAULT_PROFILE;
         m_hasPendingRx = false;
         m_revertDeadlineMs = 0;
