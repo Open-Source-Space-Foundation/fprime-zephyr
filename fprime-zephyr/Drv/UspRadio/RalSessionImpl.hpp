@@ -102,9 +102,11 @@ class RalSessionImpl final : public RalSession {
 
     // startCw lock window
     static void onPreCw(void);
+    static void onPostCw(rp_status_t status);
 
-    // stopRadio lock window
-    static void onPreStop(void);
+    // No pre/post callbacks for stopRadio: stop is achieved via
+    // smtc_rac_unlock_radio_access (abort), which fires the running task's
+    // post-callback with RP_STATUS_TASK_ABORTED.  See stopRadio() + onPostRx/Tx/Cw.
 
     // Internal helpers (called from within RAC lock window)
     bool applyLoRa_or_Gfsk(const LinkProfile& p);
@@ -138,6 +140,14 @@ class RalSessionImpl final : public RalSession {
     // Semaphore: transmitPacket() blocks until the RAC lock window fires
     struct k_sem m_txDoneSem;
     struct k_sem m_cwDoneSem;
+    // Semaphore: applyProfile() blocks until onPreApply has run and set the result.
+    // Without this, applyProfile() reads m_applyScratch.result before the RAC
+    // pre-callback has executed (smtc_rac_lock_radio_access enqueues async).
+    struct k_sem m_applyDoneSem;
+    // Semaphore: stopRadio() blocks until onPreStop has run (chip in standby).
+    // Required so transmitPacket() doesn't try to enqueue while RX lock is
+    // still running (RP_TASK_STATUS_ALREADY_RUNNING → SMTC_RAC_ERROR).
+    struct k_sem m_stopDoneSem;
 
     // ------------------------------------------------------------------
     // Singleton pointer — set in init(), read by static trampolines.
