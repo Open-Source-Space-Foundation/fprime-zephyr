@@ -25,7 +25,7 @@
 //
 // Sync word notes
 // ---------------
-// P0 LoRa sync word 0x1424: this is the "private network" sync word
+// P0 LoRa sync word 0x12: private-network (1-byte convention).  GRC uses 0x12.
 // expected by the Zephyr loramac-node driver (lora_modem_config.public_network
 // = false → LoRa chip register 0x0740 = 0x14, 0x0741 = 0x24 on SX126x).
 // P3 GFSK sync word 0xC9C9C9C9: 4-byte word, chosen for high autocorrelation
@@ -90,7 +90,9 @@ struct LoRaParams {
     U32 bw_hz;         //!< Bandwidth in Hz (must be 125000 for all v1 profiles)
     U8  cr;            //!< Coding rate denominator: 5=CR4/5, 6=CR4/6, …
     bool ldro;         //!< Low Data Rate Optimisation (recommended for SF≥10+BW125)
-    U16 sync_word;     //!< 2-byte LoRa sync word (0x1424 = private; 0x3444 = public)
+    U16 sync_word;     //!< LoRa sync word, 1-byte convention: 0x12 = private, 0x34 = public.
+                       //!< ral_set_lora_sync_word(uint8_t) takes this 1-byte value and
+                       //!< computes the SX126x 2-byte register encoding (0x12 → 0x1424).
     U16 preamble_len;  //!< Preamble length in symbols
 };
 
@@ -133,7 +135,7 @@ constexpr U8 BOOT_DEFAULT_PROFILE       = 0;  //!< Index of boot-default (P0)
 //
 // P0  LoRa SF8/125k/CR4:5  — boot default, parity with today's legacy LoRa
 //     link (Zephyr loramac-node: SF8, BW125, CR4/5, preamble 8, private
-//     sync word 0x1424, LDRO off).
+//     sync word 0x12, LDRO off).
 //
 // P1  LoRa SF10/125k       — long-range / link-degraded fallback.
 //     LDRO recommended (ToA symbol time ≈ 8.2 ms > 16 ms threshold at 125k).
@@ -164,7 +166,7 @@ constexpr LinkProfile LINK_PROFILE_TABLE[LINK_PROFILE_COUNT] = {
             .bw_hz        = 125000,
             .cr           = 5,         // CR4/5
             .ldro         = false,
-            .sync_word    = 0x1424U,   // SX126x private-network sync word
+            .sync_word    = 0x12U,     // private-network (1-byte convention; GRC uses 0x12)
             .preamble_len = 8,         // matches legacy LoRaConfig::PREAMBLE_LENGTH
         },
     },
@@ -178,7 +180,7 @@ constexpr LinkProfile LINK_PROFILE_TABLE[LINK_PROFILE_COUNT] = {
             .bw_hz        = 125000,
             .cr           = 5,         // CR4/5
             .ldro         = true,      // LDRO on: symbol time ~8.2 ms at SF10/125k
-            .sync_word    = 0x1424U,
+            .sync_word    = 0x12U,
             .preamble_len = 8,
         },
     },
@@ -192,7 +194,7 @@ constexpr LinkProfile LINK_PROFILE_TABLE[LINK_PROFILE_COUNT] = {
             .bw_hz        = 125000,
             .cr           = 5,         // CR4/5
             .ldro         = false,
-            .sync_word    = 0x1424U,
+            .sync_word    = 0x12U,
             .preamble_len = 8,
         },
     },
