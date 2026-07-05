@@ -79,6 +79,8 @@ RalSessionImpl::RalSessionImpl(uint32_t freq_hz, int8_t tx_power_dbm)
     m_applyScratch = {};
     k_sem_init(&m_txDoneSem, 0, 1);
     k_sem_init(&m_cwDoneSem, 0, 1);
+    k_sem_init(&m_applyDoneSem, 0, 1);
+    k_sem_init(&m_stopDoneSem, 0, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,13 +156,21 @@ void RalSessionImpl::onPreApply(void) {
     } else {
         self->m_applyScratch.result = -EIO;
     }
-    // Unlock immediately — we don't need to hold through a TX/RX
+    // Unlock immediately — we don't need to hold through a TX/RX.
+    // The unlock fires the post-callback (onPostApply) after the radio planner
+    // transitions the task to FINISHED.  We signal from onPostApply (not here)
+    // so that applyProfile() does not attempt a new smtc_rac_lock_radio_access
+    // before the task has reached FINISHED state.
     smtc_rac_unlock_radio_access(self->m_radio_id);
 }
 
 void RalSessionImpl::onPostApply(rp_status_t /*status*/) {
-    // Nothing to do — result was set in onPreApply and unlock was called there.
-    // The post-callback fires after the unlock with RP_STATUS_TASK_UNLOCKED.
+    // Fires on the USP thread after the radio planner has fully processed the
+    // unlock (task state → FINISHED).  Signal applyProfile() that the result
+    // is ready AND the hook_id is available for the next enqueue.
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
+    k_sem_give(&self->m_applyDoneSem);
 }
 
 int RalSessionImpl::applyProfile(const LinkProfile& profile) {
@@ -176,6 +186,13 @@ int RalSessionImpl::applyProfile(const LinkProfile& profile) {
     smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
     if (rc != SMTC_RAC_SUCCESS) {
         return -EIO;
+    }
+    // Block until onPreApply has run and set m_applyScratch.result.
+    // Timeout: 2 s (RAC should schedule ASAP on an idle radio).
+    int ret = k_sem_take(&m_applyDoneSem, K_SECONDS(2));
+    if (ret != 0) {
+        Fw::Logger::log("[UspRadio] applyProfile: RAC pre-callback timeout\n");
+        return -ETIMEDOUT;
     }
     return m_applyScratch.result;
 }
@@ -274,9 +291,19 @@ void RalSessionImpl::onPreRx(void) {
     //  until stopRadio() is called or a frame arrives.)
 }
 
-void RalSessionImpl::onPostRx(rp_status_t /*status*/) {
+void RalSessionImpl::onPostRx(rp_status_t status) {
     RalSessionImpl* self = s_instance;
     if (self == nullptr) return;
+
+    // If the task was aborted (stopRadio() called from component thread),
+    // signal the stop waiter.  NOTE: do NOT call ral_set_standby() here —
+    // rp_callback already called ral_set_sleep(retain=true) before invoking
+    // this post-callback (radio_planner.c rp_task_free path).  Calling
+    // ral_set_standby on a sleeping chip triggers the SX1262 wakeup SPI race.
+    if (status == RP_STATUS_TASK_ABORTED || status == RP_STATUS_RADIO_UNLOCKED) {
+        k_sem_give(&self->m_stopDoneSem);
+        return;
+    }
 
     // Read IRQ status
     ral_irq_t irq = RAL_IRQ_NONE;
@@ -353,9 +380,19 @@ void RalSessionImpl::onPreTx(void) {
     // Lock stays held until TX_DONE IRQ fires → post-callback runs
 }
 
-void RalSessionImpl::onPostTx(rp_status_t /*status*/) {
+void RalSessionImpl::onPostTx(rp_status_t status) {
     RalSessionImpl* self = s_instance;
     if (self == nullptr) return;
+
+    if (status == RP_STATUS_TASK_ABORTED || status == RP_STATUS_RADIO_UNLOCKED) {
+        // TX was aborted mid-flight — signal both the TX waiter and the stop waiter.
+        // NOTE: do NOT call ral_set_standby() here — rp_callback already called
+        // ral_set_sleep(retain=true) before invoking this callback (radio_planner.c).
+        self->m_txScratch.result = -ECANCELED;
+        k_sem_give(&self->m_txDoneSem);
+        k_sem_give(&self->m_stopDoneSem);
+        return;
+    }
 
     ral_irq_t irq = RAL_IRQ_NONE;
     ral_get_and_clear_irq_status(self->m_ral, &irq);
@@ -408,14 +445,23 @@ void RalSessionImpl::onPreCw(void) {
     // to call ral_set_standby and release.
 }
 
+// CW post-callback: fires when the CW task is aborted via stopRadio().
+// Signals m_stopDoneSem so stopRadio() can unblock.
+void RalSessionImpl::onPostCw(rp_status_t /*status*/) {
+    RalSessionImpl* self = s_instance;
+    if (self == nullptr) return;
+    // Signal stop waiter regardless of status (abort or unlock).
+    k_sem_give(&self->m_stopDoneSem);
+}
+
 int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
     smtc_rac_scheduler_config_t cfg = {};
     cfg.start_time_ms                  = k_uptime_get_32();
     cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
     cfg.callback_pre_radio_transaction  = onPreCw;
-    // CW holds the lock until stopRadio() calls smtc_rac_unlock_radio_access.
-    // A no-op post callback is required (must not be NULL per API docs).
-    cfg.callback_post_radio_transaction = [](rp_status_t) {};
+    // CW holds the lock until stopRadio() calls smtc_rac_unlock_radio_access,
+    // which triggers this post-callback (RP_STATUS_TASK_ABORTED / RADIO_UNLOCKED).
+    cfg.callback_post_radio_transaction = onPostCw;
 
     smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
     if (rc != SMTC_RAC_SUCCESS) return -EIO;
@@ -426,26 +472,40 @@ int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
 
 // ---------------------------------------------------------------------------
 // stopRadio()
+//
+// Design: smtc_rac_lock_radio_access cannot be called while another task on
+// the same hook_id is RUNNING (rp_task_enqueue returns
+// RP_TASK_STATUS_ALREADY_RUNNING).  Instead, we call
+// smtc_rac_unlock_radio_access() directly to abort whatever is running, then
+// wait for the running task's post-callback to fire with RP_STATUS_TASK_ABORTED.
+// The post-callbacks (onPostRx, onPostTx, onPostCw_trampoline) detect the abort
+// and give m_stopDoneSem.  After that the hook_id is FINISHED and
+// transmitPacket() can safely call smtc_rac_lock_radio_access.
 // ---------------------------------------------------------------------------
 
-void RalSessionImpl::onPreStop(void) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
-
-    ral_set_standby(self->m_ral, RAL_STANDBY_CFG_RC);
-    smtc_rac_unlock_radio_access(self->m_radio_id);
-}
-
 int RalSessionImpl::stopRadio() {
-    smtc_rac_scheduler_config_t cfg = {};
-    cfg.start_time_ms                  = k_uptime_get_32();
-    cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
-    cfg.callback_pre_radio_transaction  = onPreStop;
-    // No-op post callback required (must not be NULL per API docs).
-    cfg.callback_post_radio_transaction = [](rp_status_t) {};
+    // Drain any stale semaphore count from a previous un-awaited stop.
+    (void)k_sem_take(&m_stopDoneSem, K_NO_WAIT);
 
-    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
-    return (rc == SMTC_RAC_SUCCESS) ? 0 : -EIO;
+    // Abort whatever is running on this hook (RX, CW, or idle).
+    // smtc_rac_unlock_radio_access always returns SMTC_RAC_SUCCESS, so the
+    // return code does not distinguish "was running" from "already finished".
+    (void)smtc_rac_unlock_radio_access(m_radio_id);
+
+    // Wait for the running task's post-callback to confirm abort.
+    // If the task was already FINISHED, no post-callback fires — we use a short
+    // timeout (50 ms) so we don't stall indefinitely on an already-idle radio.
+    // 50 ms is >> the USP thread scheduling latency but << any real radio op.
+    int ret = k_sem_take(&m_stopDoneSem, K_MSEC(50));
+    if (ret == -EAGAIN) {
+        // Radio was already idle — treat as success.
+        return 0;
+    }
+    if (ret != 0) {
+        Fw::Logger::log("[UspRadio] stopRadio: abort post-callback error %d\n", ret);
+        return -ETIMEDOUT;
+    }
+    return 0;
 }
 
 }  // namespace Zephyr

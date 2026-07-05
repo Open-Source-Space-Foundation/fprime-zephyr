@@ -202,6 +202,14 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             size = MAX_PACKET_SIZE;  // truncate; Phase 5 will validate framing
         }
 
+        // Stop continuous RX before TX.  startReceive() holds the RAC lock
+        // window open indefinitely (RP_TASK_STATE_RUNNING on this hook_id),
+        // so a subsequent smtc_rac_lock_radio_access call for TX would return
+        // RP_TASK_STATUS_ALREADY_RUNNING → SMTC_RAC_ERROR → -EIO.
+        // stopRadio() acquires its own lock window to put the chip in standby,
+        // releasing the continuous-RX lock so transmitPacket() can proceed.
+        (void)m_session->stopRadio();
+
         int rc = m_session->transmitPacket(data.getData(), static_cast<std::size_t>(size));
         if (rc != 0) {
             this->log_WARNING_HI_SendFailed(static_cast<I32>(rc));
@@ -256,6 +264,9 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         this->log_WARNING_HI_InvalidProfile(profile);
         return;
     }
+    // Stop continuous RX before applying a new TX profile (same ALREADY_RUNNING
+    // guard as CW and deferredSetRxProfile).
+    (void)m_session->stopRadio();
     (void)applyProfile(idx, UspRadioDirection::TX);
     this->tlmWrite_TxProfile(profile);
 }
@@ -275,7 +286,11 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
     if (action == ProfilePolicy::Action::kNoOp) {
         return;
     }
-    // kApplyRx — apply the new profile and re-arm RX
+    // kApplyRx — stop continuous RX (which holds the RAC lock open in RUNNING
+    // state), apply the new profile, then re-arm RX.  Without stopRadio(),
+    // applyProfile() → smtc_rac_lock_radio_access returns ALREADY_RUNNING →
+    // SMTC_RAC_ERROR → failure, silently leaving the profile unchanged.
+    (void)m_session->stopRadio();
     if (!applyProfile(idx, UspRadioDirection::RX)) {
         return;
     }
@@ -294,6 +309,14 @@ void UspRadio::deferredContinuousWave_internalInterfaceHandler(U16 seconds) {
     // Use the current TX profile for CW (freq/power; pkt-type overridden to LoRa by RalSessionImpl)
     U8 txIdx = m_policy.txProfile();
     const LinkProfile& cwProfile = LINK_PROFILE_TABLE[txIdx];
+
+    // Stop continuous RX before CW.  startReceive() holds the RAC lock window
+    // open indefinitely (RP_TASK_STATE_RUNNING on this hook_id), so a subsequent
+    // smtc_rac_lock_radio_access call for CW would return
+    // RP_TASK_STATUS_ALREADY_RUNNING → SMTC_RAC_ERROR → -EIO.
+    // stopRadio() aborts the running task via smtc_rac_unlock_radio_access and
+    // waits for the post-callback to confirm the hook_id is FINISHED.
+    (void)m_session->stopRadio();
 
     int rc = m_session->startCw(cwProfile);
     if (rc != 0) {
