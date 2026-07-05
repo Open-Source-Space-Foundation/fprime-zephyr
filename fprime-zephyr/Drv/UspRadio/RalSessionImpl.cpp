@@ -282,65 +282,74 @@ void RalSessionImpl::onPreRx(void) {
     RalSessionImpl* self = s_instance;
     if (self == nullptr) return;
 
+    // PRE callback fires once when the LOCK task is first launched (ASAP → running).
+    // Set up IRQ mask and start continuous RX.  Packet reading happens in
+    // onPostRx (called on each DIO1 with RP_STATUS_RADIO_LOCKED while RUNNING).
     ral_set_dio_irq_params(self->m_ral,
         RAL_IRQ_RX_DONE | RAL_IRQ_RX_TIMEOUT | RAL_IRQ_RX_CRC_ERROR);
     ral_cfg_rx_boosted(self->m_ral, true);
     ral_set_rx(self->m_ral, RAL_RX_TIMEOUT_CONTINUOUS_MODE);
-    // Lock stays held — the USP thread will service the DIO1 edge and call
-    // the post-transaction callback when a frame arrives.
-    // (We do NOT unlock here; continuous RX holds the RAC transaction open
-    //  until stopRadio() is called or a frame arrives.)
+    // Lock stays held — the USP thread will service DIO1 edges via onPostRx.
+    // stopRadio() aborts via smtc_rac_unlock_radio_access → onPostRx(RADIO_UNLOCKED).
 }
 
 void RalSessionImpl::onPostRx(rp_status_t status) {
     RalSessionImpl* self = s_instance;
     if (self == nullptr) return;
 
-    // If the task was aborted (stopRadio() called from component thread),
-    // signal the stop waiter.  NOTE: do NOT call ral_set_standby() here —
-    // rp_callback already called ral_set_sleep(retain=true) before invoking
-    // this post-callback (radio_planner.c rp_task_free path).  Calling
-    // ral_set_standby on a sleeping chip triggers the SX1262 wakeup SPI race.
+    // POST callback fires on two paths:
+    //   (A) DIO1 fires while LOCK task is RUNNING → RP_STATUS_RADIO_LOCKED.
+    //       Read the IRQ register; if RX_DONE and no CRC_ERROR, harvest the
+    //       packet payload and invoke the rxDone callback.  Then re-arm
+    //       continuous RX to await the next frame (lock stays held).
+    //   (B) Task freed via abort (stopRadio()) → RP_STATUS_RADIO_UNLOCKED or
+    //       RP_STATUS_TASK_ABORTED.  Signal the stop waiter.
+    //       NOTE: do NOT call ral_set_standby() here — rp_callback already
+    //       called ral_set_sleep(retain=true) before invoking this callback.
+
+    if (status == RP_STATUS_RADIO_LOCKED) {
+        // (A) DIO1 fired while RX lock is running — read IRQ and harvest packet.
+        ral_irq_t irq = RAL_IRQ_NONE;
+        ral_get_and_clear_irq_status(self->m_ral, &irq);
+
+        if ((irq & RAL_IRQ_RX_DONE) && !(irq & RAL_IRQ_RX_CRC_ERROR)) {
+            uint8_t  buf[MAX_RX_BUF];
+            uint16_t len = 0;
+
+            ral_handle_rx_done(self->m_ral);
+            ral_get_pkt_payload(self->m_ral, MAX_RX_BUF, buf, &len);
+
+            ral_lora_rx_pkt_status_t lora_status = {};
+            ral_gfsk_rx_pkt_status_t gfsk_status = {};
+            int16_t rssi = 0;
+            int8_t  snr  = 0;
+
+            if (ral_get_lora_rx_pkt_status(self->m_ral, &lora_status) == RAL_STATUS_OK) {
+                rssi = static_cast<int16_t>(lora_status.rssi_pkt_in_dbm);
+                snr  = static_cast<int8_t>(lora_status.snr_pkt_in_db);
+            } else if (ral_get_gfsk_rx_pkt_status(self->m_ral, &gfsk_status) == RAL_STATUS_OK) {
+                rssi = static_cast<int16_t>(gfsk_status.rssi_avg_in_dbm);
+                snr  = 0;
+            }
+
+            if (self->m_rxDone) {
+                self->m_rxDone(buf, len, rssi, snr);
+            }
+        }
+
+        // Re-arm continuous RX for the next frame.
+        ral_set_rx(self->m_ral, RAL_RX_TIMEOUT_CONTINUOUS_MODE);
+        return;
+    }
+
     if (status == RP_STATUS_TASK_ABORTED || status == RP_STATUS_RADIO_UNLOCKED) {
+        // (B) Task freed via stopRadio().
         k_sem_give(&self->m_stopDoneSem);
         return;
     }
 
-    // Read IRQ status
-    ral_irq_t irq = RAL_IRQ_NONE;
-    ral_get_and_clear_irq_status(self->m_ral, &irq);
-
-    if ((irq & RAL_IRQ_RX_DONE) && !(irq & RAL_IRQ_RX_CRC_ERROR)) {
-        uint8_t  buf[MAX_RX_BUF];
-        uint16_t len = 0;
-
-        ral_handle_rx_done(self->m_ral);
-        ral_get_pkt_payload(self->m_ral, MAX_RX_BUF, buf, &len);
-
-        // Get link quality stats
-        ral_lora_rx_pkt_status_t lora_status = {};
-        ral_gfsk_rx_pkt_status_t gfsk_status = {};
-        int16_t rssi = 0;
-        int8_t  snr  = 0;
-
-        // Try LoRa first; fall back to GFSK
-        if (ral_get_lora_rx_pkt_status(self->m_ral, &lora_status) == RAL_STATUS_OK) {
-            rssi = static_cast<int16_t>(lora_status.rssi_pkt_in_dbm);
-            snr  = static_cast<int8_t>(lora_status.snr_pkt_in_db);
-        } else if (ral_get_gfsk_rx_pkt_status(self->m_ral, &gfsk_status) == RAL_STATUS_OK) {
-            rssi = static_cast<int16_t>(gfsk_status.rssi_avg_in_dbm);
-            snr  = 0;  // GFSK has no SNR
-        }
-
-        // Invoke the registered callback (fires on USP thread — must be quick)
-        if (self->m_rxDone) {
-            self->m_rxDone(buf, len, rssi, snr);
-        }
-
-        // Re-arm continuous RX
-        ral_set_rx(self->m_ral, RAL_RX_TIMEOUT_CONTINUOUS_MODE);
-    }
 }
+
 
 int RalSessionImpl::startReceive() {
     smtc_rac_scheduler_config_t cfg = {};
@@ -350,7 +359,12 @@ int RalSessionImpl::startReceive() {
     cfg.callback_post_radio_transaction = onPostRx;
 
     smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
-    return (rc == SMTC_RAC_SUCCESS) ? 0 : -EIO;
+    if (rc != SMTC_RAC_SUCCESS) {
+        Fw::Logger::log("[UspRadio] startReceive: smtc_rac_lock_radio_access failed rc=%d\n",
+                        static_cast<int>(rc));
+        return -EIO;
+    }
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +374,10 @@ int RalSessionImpl::startReceive() {
 void RalSessionImpl::onPreTx(void) {
     RalSessionImpl* self = s_instance;
     if (self == nullptr) return;
+
+    // PRE callback fires once when the LOCK task is first launched.
+    // Set up payload, configure TX_DONE IRQ, and start the transmitter.
+    // TX_DONE handling happens in onPostTx(RP_STATUS_RADIO_LOCKED).
 
     // Set payload
     if (ral_set_pkt_payload(self->m_ral,
@@ -377,30 +395,55 @@ void RalSessionImpl::onPreTx(void) {
         smtc_rac_unlock_radio_access(self->m_radio_id);
         return;
     }
-    self->m_txScratch.result = 0;
-    // Lock stays held until TX_DONE IRQ fires → post-callback runs
+    // Lock stays held until TX_DONE DIO1 fires → onPostTx(RP_STATUS_RADIO_LOCKED).
 }
 
 void RalSessionImpl::onPostTx(rp_status_t status) {
     RalSessionImpl* self = s_instance;
     if (self == nullptr) return;
 
-    if (status == RP_STATUS_TASK_ABORTED || status == RP_STATUS_RADIO_UNLOCKED) {
-        // TX was aborted mid-flight — signal both the TX waiter and the stop waiter.
-        // NOTE: do NOT call ral_set_standby() here — rp_callback already called
-        // ral_set_sleep(retain=true) before invoking this callback (radio_planner.c).
+    // POST callback fires on three paths:
+    //   (A) DIO1 fires with TX_DONE while LOCK task RUNNING → RP_STATUS_RADIO_LOCKED.
+    //       Read IRQ, call txDone callback, set result=0, unlock to free the task.
+    //       The unlock will fire this callback again with RP_STATUS_RADIO_UNLOCKED (B).
+    //   (B) Task freed after our own unlock (from path A) → RP_STATUS_RADIO_UNLOCKED.
+    //       Signal the TX waiter.
+    //   (C) Mid-flight abort (stopRadio()) → RP_STATUS_TASK_ABORTED.
+    //       Signal both the TX waiter and the stop waiter.
+    //
+    // NOTE: do NOT call ral_set_standby() on paths B/C — rp_callback already
+    // called ral_set_sleep(retain=true) before invoking this callback.
+
+    if (status == RP_STATUS_RADIO_LOCKED) {
+        // (A) TX_DONE IRQ
+        ral_irq_t irq = RAL_IRQ_NONE;
+        ral_get_and_clear_irq_status(self->m_ral, &irq);
+        if (irq & RAL_IRQ_TX_DONE) {
+            ral_handle_tx_done(self->m_ral);
+            if (self->m_txDone) self->m_txDone();
+        }
+        self->m_txScratch.result = 0;
+        // Unlock → rp_callback processes UNLOCK_RADIO_ACCESS → rp_task_free →
+        // ral_set_sleep → fires this callback again with RP_STATUS_RADIO_UNLOCKED.
+        smtc_rac_unlock_radio_access(self->m_radio_id);
+        return;
+    }
+
+    if (status == RP_STATUS_RADIO_UNLOCKED) {
+        // (B) Task freed after our own TX_DONE-triggered unlock.
+        // m_txScratch.result was set in path (A).
+        k_sem_give(&self->m_txDoneSem);
+        return;
+    }
+
+    if (status == RP_STATUS_TASK_ABORTED) {
+        // (C) Mid-flight abort from stopRadio()
         self->m_txScratch.result = -ECANCELED;
         k_sem_give(&self->m_txDoneSem);
         k_sem_give(&self->m_stopDoneSem);
         return;
     }
 
-    ral_irq_t irq = RAL_IRQ_NONE;
-    ral_get_and_clear_irq_status(self->m_ral, &irq);
-    if (irq & RAL_IRQ_TX_DONE) {
-        ral_handle_tx_done(self->m_ral);
-        if (self->m_txDone) self->m_txDone();
-    }
     k_sem_give(&self->m_txDoneSem);
 }
 
