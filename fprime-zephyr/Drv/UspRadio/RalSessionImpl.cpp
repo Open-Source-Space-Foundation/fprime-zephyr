@@ -539,67 +539,71 @@ int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
 // and give m_stopDoneSem.  After that the hook_id is FINISHED and
 // transmitPacket() can safely call smtc_rac_lock_radio_access.
 //
-// Return-code handling: smtc_rac_unlock_radio_access()'s return code and the
-// m_stopDoneSem wait are two independent signals that must be combined (see
-// body below) to tell "hook was already idle" apart from "rp_task_abort()
-// failed on a task that was actually RUNNING" — the latter leaves the hook
-// wedged RUNNING forever (every later smtc_rac_lock_radio_access() on it
-// returns SMTC_RAC_ERROR), so it must not be swallowed as a benign timeout.
+// Completion detection: the authoritative "hook is free" signal is the radio
+// planner's task state — rp_task_enqueue() only accepts a new lock once the
+// hook has returned to RP_TASK_STATE_FINISHED (idle hooks already sit there,
+// see rp_task_free() / radio planner init). The post-callback semaphore is
+// used as a fast wake-up only: if the hook was already idle no callback ever
+// fires, and for an aborted task rp_task_call_aborted() marks the hook
+// FINISHED via rp_task_free() immediately before running the callback.
+//
+// The previous implementation used one fixed 50 ms semaphore wait and treated
+// a timeout with unlock_rc == SUCCESS as "already idle". That misclassified
+// the common busy case: aborting a RUNNING task is only processed when the
+// USP thread next runs the RAC engine (rp_task_abort() just raises a fake
+// soft IRQ), and under load that regularly exceeded 50 ms. stopRadio() then
+// returned success while the hook was still RUNNING, so the caller's
+// immediate smtc_rac_lock_radio_access() failed — a transient
+// ConfigurationFailed on roughly 1 in 10 profile switches. unlock_rc cannot
+// disambiguate this: rp_task_abort() returns OK for idle, pending, and
+// running hooks alike.
 // ---------------------------------------------------------------------------
+
+namespace {
+constexpr int64_t STOP_DEADLINE_MS = 1000;  //!< generous bound on USP-thread abort processing
+constexpr int32_t STOP_POLL_MS = 5;         //!< hook-state poll interval while waiting
+}  // namespace
 
 int RalSessionImpl::stopRadio() {
     // Drain any stale semaphore count from a previous un-awaited stop.
     (void)k_sem_take(&m_stopDoneSem, K_NO_WAIT);
 
-    // Abort whatever is running on this hook (RX, CW, or idle).
-    // NOTE: smtc_rac_unlock_radio_access() does NOT always return
-    // SMTC_RAC_SUCCESS. It forwards the return of rp_task_abort() (see
-    // smtc_rac_abort_radio_submit() in smtc_rac.c, ~line 473): on failure it
-    // returns SMTC_RAC_ERROR. We must capture this and use it below to
-    // disambiguate "already idle" from "abort of a running task failed".
+    // Abort whatever is running on this hook (RX, CW, or idle). A non-SUCCESS
+    // return means the abort could not even be submitted (rp_task_abort()
+    // failed) — the hook may be wedged RUNNING, and every later
+    // smtc_rac_lock_radio_access() on it would return SMTC_RAC_ERROR.
+    // Surface it distinctly rather than swallowing it.
     smtc_rac_return_code_t unlock_rc = smtc_rac_unlock_radio_access(m_radio_id);
-
-    // Wait for the running task's post-callback to confirm abort.
-    // If the task was already FINISHED, no post-callback fires — we use a short
-    // timeout (50 ms) so we don't stall indefinitely on an already-idle radio.
-    // 50 ms is >> the USP thread scheduling latency but << any real radio op.
-    int ret = k_sem_take(&m_stopDoneSem, K_MSEC(50));
-    if (ret == 0) {
-        // Post-callback fired and confirmed the abort completed.
-        return 0;
+    if (unlock_rc != SMTC_RAC_SUCCESS) {
+        Fw::Logger::log(
+            "[UspRadio] stopRadio: abort FAILED on radio_id=%" PRIu8
+            " (unlock_rc=%d) - RAC hook likely wedged RUNNING\n",
+            m_radio_id, static_cast<int>(unlock_rc));
+        return -EIO;
     }
 
-    if (ret == -EAGAIN) {
-        // No post-callback fired within the timeout. This is ambiguous
-        // between two very different situations, which unlock_rc lets us
-        // tell apart:
-        //
-        //   (a) "already idle" — nothing was running on this hook, so the
-        //       abort was a no-op and no post-callback was ever coming.
-        //       smtc_rac_unlock_radio_access() reports this as SUCCESS.
-        //       Benign — treat as success (previous behavior).
-        //
-        //   (b) "abort failed on a running task" — a task WAS running and
-        //       rp_task_abort() failed to abort it, so
-        //       smtc_rac_unlock_radio_access() returned SMTC_RAC_ERROR.
-        //       This is the dangerous case: the RAC hook is left RUNNING,
-        //       and every later smtc_rac_lock_radio_access() on this hook
-        //       will return SMTC_RAC_ERROR (rc=1) forever — the radio is
-        //       permanently dead until reboot. Do NOT silently swallow
-        //       this; surface it distinctly so callers/logs can catch it
-        //       before the next lock attempt fails mysteriously.
-        if (unlock_rc != SMTC_RAC_SUCCESS) {
-            Fw::Logger::log(
-                "[UspRadio] stopRadio: abort FAILED on radio_id=%" PRIu8
-                " (unlock_rc=%d) - RAC hook likely wedged RUNNING\n",
-                m_radio_id, static_cast<int>(unlock_rc));
-            return -EIO;
+    // Wait until the hook is actually free: fast path is the abort
+    // post-callback giving m_stopDoneSem; truth is the hook state reaching
+    // RP_TASK_STATE_FINISHED (covers the already-idle hook, where no
+    // callback is coming, without a race on pre-abort state snapshots).
+    radio_planner_t* rp = smtc_rac_get_rp();
+    const int64_t deadline = k_uptime_get() + STOP_DEADLINE_MS;
+    for (;;) {
+        if (k_sem_take(&m_stopDoneSem, K_MSEC(STOP_POLL_MS)) == 0) {
+            return 0;
         }
-        // (a) Radio was already idle — treat as success.
-        return 0;
+        if (rp->tasks[m_radio_id].state == RP_TASK_STATE_FINISHED) {
+            return 0;
+        }
+        if (k_uptime_get() >= deadline) {
+            break;
+        }
     }
 
-    Fw::Logger::log("[UspRadio] stopRadio: abort post-callback error %d\n", ret);
+    Fw::Logger::log(
+        "[UspRadio] stopRadio: hook not FINISHED %" PRId64 " ms after abort on radio_id=%" PRIu8
+        " (state=%d) - RAC hook likely wedged RUNNING\n",
+        STOP_DEADLINE_MS, m_radio_id, static_cast<int>(rp->tasks[m_radio_id].state));
     return -ETIMEDOUT;
 }
 
