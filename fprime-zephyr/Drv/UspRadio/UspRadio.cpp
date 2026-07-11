@@ -228,6 +228,13 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         }
     } else if (m_transmitState == UspTransmitState::DISABLING) {
         m_transmitState = UspTransmitState::DISABLED;
+        // TX episode over — guarantee continuous RX is armed (HWIL 2026-07-11:
+        // without this the board stays deaf after TRANSMIT DISABLED).  Stop
+        // first: if the last ENABLED frame's re-arm succeeded, RX is already
+        // RUNNING and a bare startReceive() would fail ALREADY_RUNNING.
+        if ((m_session->stopRadio() != 0) || (m_session->startReceive() != 0)) {
+            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        }
     }
 
     this->dataReturnOut_out(0, mutableData, context);
@@ -247,8 +254,20 @@ void UspRadio::deferredTransmitCmd_internalInterfaceHandler(const UspTransmitSta
         }
         m_transmitState = UspTransmitState::ENABLED;
     } else {
-        if (m_transmitState != UspTransmitState::DISABLED) {
+        if (m_transmitState == UspTransmitState::ENABLED) {
+            // A trailing frame is expected: its DISABLING→DISABLED transition
+            // in deferredTxPacket completes the episode and re-arms RX.
             m_transmitState = UspTransmitState::DISABLING;
+        } else {
+            // DISABLING with no trailing frame in the queue, or already
+            // DISABLED: no send cycle will run the re-arm — guarantee
+            // continuous RX here.  This also gives operators an explicit
+            // recover-RX lever (repeat TRANSMIT DISABLED), since a
+            // same-profile SET_RX_PROFILE is a kNoOp and does not re-arm.
+            m_transmitState = UspTransmitState::DISABLED;
+            if ((m_session->stopRadio() != 0) || (m_session->startReceive() != 0)) {
+                this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+            }
         }
     }
 }
@@ -277,6 +296,12 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         return;
     }
     (void)applyProfile(idx, UspRadioDirection::TX);
+    // Re-arm continuous RX (mirrors deferredSetRxProfile).  Without this the
+    // radio is left in standby after the TX-profile apply — deaf until a
+    // different-profile SET_RX_PROFILE or reboot (HWIL 2026-07-11).
+    if (m_session->startReceive() != 0) {
+        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+    }
     this->tlmWrite_TxProfile(profile);
 }
 
@@ -293,6 +318,20 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
         return;
     }
     if (action == ProfilePolicy::Action::kNoOp) {
+        // Same-profile SET_RX_PROFILE: no policy/revert change, but treat it
+        // as an explicit "ensure RX is armed on this profile" request (HWIL
+        // 2026-07-11: deaf boards could only be recovered with a different-
+        // profile cycle because this path short-circuited without re-arming).
+        // Re-apply too: a preceding TX episode may have left TX-profile
+        // modulation params on the chip.
+        if (m_session->stopRadio() != 0) {
+            this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
+            return;
+        }
+        (void)applyProfile(idx, UspRadioDirection::RX);
+        if (m_session->startReceive() != 0) {
+            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        }
         return;
     }
     // kApplyRx — stop continuous RX (which holds the RAC lock open in RUNNING
