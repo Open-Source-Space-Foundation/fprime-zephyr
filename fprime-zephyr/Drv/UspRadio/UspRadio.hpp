@@ -169,6 +169,11 @@ class UspRadio final : public UspRadioComponentBase {
     //! the radio is never left deaf once the TX queue drains.
     std::atomic<U32>  m_pendingTxFrames;
 
+    //! Set by the ENABLED TX path: re-arm continuous RX at the handler tail,
+    //! after comStatusOut has released the one-in-flight com pipeline (so a
+    //! queued next frame has a chance to reach dataIn and suppress the re-arm).
+    bool              m_rearmAfterTx;
+
     // Telemetry accumulators
     FwSizeType m_bytesSent;
     FwSizeType m_bytesReceived;
