@@ -74,9 +74,12 @@ RalSessionImpl::RalSessionImpl(uint32_t freq_hz, int8_t tx_power_dbm)
       m_initialized(false),
       m_rxLen(0),
       m_rxRssi(0),
-      m_rxSnr(0) {
+      m_rxSnr(0),
+      m_pktType(RAL_PKT_TYPE_LORA) {
     m_txScratch = {};
     m_applyScratch = {};
+    m_loraPktParams = {};
+    m_gfskPktParams = {};
     k_sem_init(&m_txDoneSem, 0, 1);
     k_sem_init(&m_cwDoneSem, 0, 1);
     k_sem_init(&m_applyDoneSem, 0, 1);
@@ -221,6 +224,8 @@ int RalSessionImpl::applyLoRa(const LoRaParams& p) {
     pkt.crc_is_on            = true;
     pkt.invert_iq_is_on      = false;
     if (ral_set_lora_pkt_params(m_ral, &pkt) != RAL_STATUS_OK) return -EIO;
+    m_pktType       = RAL_PKT_TYPE_LORA;
+    m_loraPktParams = pkt;
 
     // 4. Sync word (1-byte convention: 0x12 = private, 0x34 = public;
     //    ral_set_lora_sync_word takes uint8_t; LinkProfiles stores the value in U16)
@@ -267,6 +272,8 @@ int RalSessionImpl::applyGfsk(const GfskParams& p) {
     }
     pkt.dc_free = p.whitening ? RAL_GFSK_DC_FREE_WHITENING : RAL_GFSK_DC_FREE_OFF;
     if (ral_set_gfsk_pkt_params(m_ral, &pkt) != RAL_STATUS_OK) return -EIO;
+    m_pktType       = RAL_PKT_TYPE_GFSK;
+    m_gfskPktParams = pkt;
 
     // 4. Sync word
     if (ral_set_gfsk_sync_word(m_ral, p.sync_word, p.sync_word_len) != RAL_STATUS_OK) return -EIO;
@@ -302,6 +309,16 @@ void RalSessionImpl::onPreRx(void) {
     // PRE callback fires once when the LOCK task is first launched (ASAP → running).
     // Set up IRQ mask and start continuous RX.  Packet reading happens in
     // onPostRx (called on each DIO1 with RP_STATUS_RADIO_LOCKED while RUNNING).
+
+    // Restore the profile's packet params before arming: onPreTx re-issues
+    // them with the (short) true TX length, and in GFSK variable-length RX
+    // pld_len_in_bytes is the max-ACCEPTED payload — a stale short TX value
+    // would silently reject longer incoming frames.
+    if (self->m_pktType == RAL_PKT_TYPE_GFSK) {
+        ral_set_gfsk_pkt_params(self->m_ral, &self->m_gfskPktParams);
+    } else {
+        ral_set_lora_pkt_params(self->m_ral, &self->m_loraPktParams);
+    }
     ral_set_dio_irq_params(self->m_ral,
         RAL_IRQ_RX_DONE | RAL_IRQ_RX_TIMEOUT | RAL_IRQ_RX_CRC_ERROR);
     ral_cfg_rx_boosted(self->m_ral, true);
@@ -426,6 +443,29 @@ void RalSessionImpl::onPreTx(void) {
     // PRE callback fires once when the LOCK task is first launched.
     // Set up payload, configure TX_DONE IRQ, and start the transmitter.
     // TX_DONE handling happens in onPostTx(RP_STATUS_RADIO_LOCKED).
+
+    // Program the TRUE payload length.  ral_set_pkt_payload only writes the
+    // radio FIFO; the SX126x takes its transmit length (and the LoRa
+    // explicit-header / GFSK length-byte value) from SetPacketParams, which
+    // applyProfile left at the 0xFF placeholder — without this every frame
+    // radiates 255 B (payload + stale FIFO tail) and the receiver counts and
+    // delivers padded frames (HWIL 2026-07-11: 252+3 B burst → GRC BytesSent
+    // 255 vs flight BytesReceived 504 = 2×252-clamped).
+    ral_status_t lenStatus;
+    if (self->m_pktType == RAL_PKT_TYPE_GFSK) {
+        ral_gfsk_pkt_params_t pkt = self->m_gfskPktParams;
+        pkt.pld_len_in_bytes = static_cast<uint16_t>(self->m_txScratch.size);
+        lenStatus = ral_set_gfsk_pkt_params(self->m_ral, &pkt);
+    } else {
+        ral_lora_pkt_params_t pkt = self->m_loraPktParams;
+        pkt.pld_len_in_bytes = static_cast<uint8_t>(self->m_txScratch.size);
+        lenStatus = ral_set_lora_pkt_params(self->m_ral, &pkt);
+    }
+    if (lenStatus != RAL_STATUS_OK) {
+        self->m_txScratch.result = -EIO;
+        smtc_rac_unlock_radio_access(self->m_radio_id);
+        return;
+    }
 
     // Set payload
     if (ral_set_pkt_payload(self->m_ral,
