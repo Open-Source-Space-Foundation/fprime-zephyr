@@ -174,6 +174,10 @@ void RalSessionImpl::onPostApply(rp_status_t /*status*/) {
 }
 
 int RalSessionImpl::applyProfile(const LinkProfile& profile) {
+    // Drain any stale count from a previous timed-out apply whose onPostApply
+    // straggled in after the 2 s wait expired (same discipline as stopRadio()).
+    (void)k_sem_take(&m_applyDoneSem, K_NO_WAIT);
+
     m_applyScratch.profile = &profile;
     m_applyScratch.result  = -ENODEV;
 
@@ -364,7 +368,38 @@ void RalSessionImpl::onPostRx(rp_status_t status) {
 }
 
 
+namespace {
+//! Bound on waiting for the RAC hook to reach FINISHED before a new enqueue.
+//! The USP thread (higher priority than the component thread) normally frees
+//! the hook within one engine pass; 100 ms is a generous margin.  Hooks
+//! initialize to RP_TASK_STATE_FINISHED (rp_init), so the boot path never waits.
+constexpr int32_t ENQUEUE_READY_DEADLINE_MS = 100;
+}  // namespace
+
 int RalSessionImpl::startReceive() {
+    // smtc_rac_lock_radio_access → rp_task_enqueue returns
+    // RP_TASK_STATUS_ALREADY_RUNNING (→ SMTC_RAC_ERROR) if the hook is still
+    // RP_TASK_STATE_RUNNING.  Completion semaphores (m_txDoneSem etc.) are
+    // given from INSIDE the radio planner's unlock processing (rp_hook_callback
+    // runs before rp_callback finishes freeing state), so this thread can
+    // legally observe a hook the USP thread has not yet finished with.  Wait
+    // (bounded) for FINISHED — the same completion criterion stopRadio() uses —
+    // instead of failing the enqueue and leaving the radio deaf.
+    radio_planner_t* rp = smtc_rac_get_rp();
+    int32_t waited_ms = 0;
+    while ((rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) &&
+           (waited_ms < ENQUEUE_READY_DEADLINE_MS)) {
+        k_sleep(K_MSEC(1));
+        ++waited_ms;
+    }
+    if (rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) {
+        Fw::Logger::log(
+            "[UspRadio] startReceive: RAC hook not FINISHED after %" PRId32
+            " ms (state=%d) - radio busy\n",
+            ENQUEUE_READY_DEADLINE_MS, static_cast<int>(rp->tasks[m_radio_id].state));
+        return -EBUSY;
+    }
+
     smtc_rac_scheduler_config_t cfg = {};
     cfg.start_time_ms                  = k_uptime_get_32();
     cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
@@ -461,6 +496,19 @@ void RalSessionImpl::onPostTx(rp_status_t status) {
 }
 
 int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
+    // Drain any stale semaphore count from a previous un-awaited completion
+    // (same discipline as stopRadio()).  onPostTx gives m_txDoneSem on
+    // RADIO_UNLOCKED, TASK_ABORTED, and unexpected statuses; a give with no
+    // pending take (e.g. a straggler after the 10 s timeout, or an abort of an
+    // in-flight TX whose waiter already returned) leaves a count of 1.  Without
+    // this drain, the next transmitPacket() consumes the stale count instantly
+    // and returns "success" while its own TX is still in flight — the caller's
+    // startReceive() then hits the still-RUNNING hook (ALREADY_RUNNING → -EIO)
+    // and, because each real TX_DONE re-seeds the stale count, the failure
+    // repeats on EVERY subsequent frame (HWIL: ConfigurationFailed:RX at exact
+    // TX frame cadence while frames still radiate).
+    (void)k_sem_take(&m_txDoneSem, K_NO_WAIT);
+
     m_txScratch.data   = data;
     m_txScratch.size   = size;
     m_txScratch.result = 0;
@@ -512,6 +560,10 @@ void RalSessionImpl::onPostCw(rp_status_t /*status*/) {
 }
 
 int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
+    // Drain any stale count from a previous timed-out CW start (same
+    // discipline as stopRadio()).
+    (void)k_sem_take(&m_cwDoneSem, K_NO_WAIT);
+
     smtc_rac_scheduler_config_t cfg = {};
     cfg.start_time_ms                  = k_uptime_get_32();
     cfg.scheduling                     = SMTC_RAC_ASAP_TRANSACTION;
