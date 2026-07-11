@@ -22,6 +22,8 @@
 #include "fprime-zephyr/Drv/UspRadio/ProfilePolicy.hpp"
 #include "fprime-zephyr/Drv/UspRadio/RalSession.hpp"
 
+#include <atomic>
+
 namespace Zephyr {
 
 class UspRadio final : public UspRadioComponentBase {
@@ -130,12 +132,42 @@ class UspRadio final : public UspRadioComponentBase {
     ProfilePolicy     m_policy;
     UspTransmitState  m_transmitState;
 
-    // Receive scratchpad (filled by deferredRxDone handler on component thread)
+    // Receive ring (SPSC: USP-thread producer via onRxDone, component-thread
+    // consumer via deferredRxDone).  Replaces the single scratch slot, which
+    // HWIL-failed at saturation (2026-07-11 session 4): a second frame arriving
+    // before the component thread drained the queue overwrote the first AND
+    // made every queued handler invocation re-read (and re-count) the latest
+    // frame — duplicate delivery upstream + BytesReceived overcount.
+    // Indexes increment monotonically (unsigned wrap is safe: DEPTH is a power
+    // of two, and head - tail stays correct across wrap).  Producer owns
+    // m_rxHead, consumer owns m_rxTail; release/acquire pairs order the slot
+    // payload copies against index publication.
     static constexpr FwSizeType RX_SCRATCH_SIZE = MAX_PACKET_SIZE;
-    uint8_t           m_rxScratch[RX_SCRATCH_SIZE];
-    FwSizeType        m_rxScratchLen;
-    I16               m_rxRssi;
-    I8                m_rxSnr;
+    static constexpr U32 RX_RING_DEPTH = 4;  // must be a power of two
+    struct RxSlot {
+        uint8_t    data[RX_SCRATCH_SIZE];
+        FwSizeType len;
+        I16        rssi;
+        I8         snr;
+    };
+    RxSlot            m_rxRing[RX_RING_DEPTH];
+    std::atomic<U32>  m_rxHead;      //!< next slot to write (producer-owned)
+    std::atomic<U32>  m_rxTail;      //!< next slot to read (consumer-owned)
+    std::atomic<U32>  m_rxDropped;   //!< frames dropped: ring full at onRxDone
+    U32               m_rxDroppedReported;  //!< last value emitted (component thread)
+    I16               m_rxRssi;      //!< last received RSSI (component thread)
+    I8                m_rxSnr;       //!< last received SNR (component thread)
+
+    //! TX frames accepted by dataIn_handler but not yet processed by
+    //! deferredTxPacket (incremented on the Svc.Com caller thread, decremented
+    //! at deferred-handler entry).  When > 0 after a transmit, more TX work is
+    //! already queued behind us, so the per-frame continuous-RX re-arm is
+    //! skipped: the TX→re-arm→stop→TX dance costs ~50 ms/frame and throttled
+    //! saturated P3 TX to ~19 kbps vs the 33.5 kbps airtime ceiling (HWIL
+    //! 2026-07-11 session 4).  Every other radio-touching path still ends
+    //! re-armed, and the DISABLING/DISABLED seams re-arm unconditionally, so
+    //! the radio is never left deaf once the TX queue drains.
+    std::atomic<U32>  m_pendingTxFrames;
 
     // Telemetry accumulators
     FwSizeType m_bytesSent;

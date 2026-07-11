@@ -37,9 +37,13 @@ UspRadio::UspRadio(const char* compName)
       m_session(nullptr),
       m_policy(),
       m_transmitState(UspTransmitState::DISABLED),
-      m_rxScratchLen(0),
+      m_rxHead(0),
+      m_rxTail(0),
+      m_rxDropped(0),
+      m_rxDroppedReported(0),
       m_rxRssi(0),
       m_rxSnr(0),
+      m_pendingTxFrames(0),
       m_bytesSent(0),
       m_bytesReceived(0),
       m_rxReverts(0),
@@ -99,16 +103,28 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
 // ---------------------------------------------------------------------------
 
 void UspRadio::onRxDone(const uint8_t* data, std::size_t size, int16_t rssi, int8_t snr) {
-    // Store in scratch (USP thread → component thread boundary).
-    // The component thread processes this in deferredRxDone_handler.
-    // Note: scratch may be overwritten if two frames arrive before the
-    // component thread drains the queue — acceptable in low-rate scenarios;
-    // Phase 5 HWIL will verify.
-    FwSizeType safeSize = (size > RX_SCRATCH_SIZE) ? RX_SCRATCH_SIZE : static_cast<FwSizeType>(size);
-    (void)::memcpy(m_rxScratch, data, safeSize);
-    m_rxScratchLen = safeSize;
-    m_rxRssi = rssi;
-    m_rxSnr  = snr;
+    // Enqueue into the RX ring (USP thread → component thread boundary).
+    // One ring slot + one internal message per frame, so the consumer never
+    // re-reads a slot (the single-scratch predecessor delivered the LATEST
+    // frame once per queued message at saturation — duplicates + loss).
+    const U32 head = m_rxHead.load(std::memory_order_relaxed);
+    const U32 tail = m_rxTail.load(std::memory_order_acquire);
+    if ((head - tail) >= RX_RING_DEPTH) {
+        // Ring full: drop.  No F´ ports from the USP thread — the component
+        // thread notices the counter change and emits RxOverrun/RxDropped.
+        m_rxDropped.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+
+    RxSlot& slot = m_rxRing[head % RX_RING_DEPTH];
+    const FwSizeType safeSize =
+        (size > RX_SCRATCH_SIZE) ? RX_SCRATCH_SIZE : static_cast<FwSizeType>(size);
+    (void)::memcpy(slot.data, data, safeSize);
+    slot.len  = safeSize;
+    slot.rssi = rssi;
+    slot.snr  = snr;
+    // Publish the slot before the message can be consumed.
+    m_rxHead.store(head + 1, std::memory_order_release);
 
     // Post internal message — runs on component thread
     this->deferredRxDone_internalInterfaceInvoke(
@@ -170,6 +186,9 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
 void UspRadio::dataIn_handler(FwIndexType /*portNum*/,
                                Fw::Buffer& data,
                                const ComCfg::FrameContext& context) {
+    // Count before enqueue: deferredTxPacket sees >0 while more frames are
+    // in flight and skips the per-frame RX re-arm (see m_pendingTxFrames).
+    m_pendingTxFrames.fetch_add(1, std::memory_order_relaxed);
     this->deferredTxPacket_internalInterfaceInvoke(data, context);
 }
 
@@ -183,7 +202,18 @@ void UspRadio::dataReturnIn_handler(FwIndexType /*portNum*/,
 // deferredRxDone — component thread
 // ---------------------------------------------------------------------------
 
-void UspRadio::deferredRxDone_internalInterfaceHandler(I16 rssi, I8 snr) {
+void UspRadio::deferredRxDone_internalInterfaceHandler(I16 /*rssi*/, I8 /*snr*/) {
+    // Pop one ring slot (message args are ignored: the slot carries the
+    // rssi/snr sampled with ITS frame, not the latest one).
+    const U32 tail = m_rxTail.load(std::memory_order_relaxed);
+    const U32 head = m_rxHead.load(std::memory_order_acquire);
+    if (tail == head) {
+        // Message without a slot: can only happen if the producer dropped a
+        // frame between our reads — nothing to deliver.
+        return;
+    }
+    const RxSlot& slot = m_rxRing[tail % RX_RING_DEPTH];
+
     // Notify ProfilePolicy that a frame was received
     ProfilePolicy::Action action = m_policy.frameReceived();
     if (action == ProfilePolicy::Action::kConfirmRx) {
@@ -193,21 +223,35 @@ void UspRadio::deferredRxDone_internalInterfaceHandler(I16 rssi, I8 snr) {
     }
 
     // Allocate and dispatch the received frame
-    const FwSizeType payloadSize = m_rxScratchLen;
+    const FwSizeType payloadSize = slot.len;
+    m_rxRssi = slot.rssi;
+    m_rxSnr  = slot.snr;
     Fw::Buffer buffer = this->allocate_out(0, payloadSize);
     if (buffer.isValid()) {
-        (void)::memcpy(buffer.getData(), m_rxScratch, payloadSize);
+        (void)::memcpy(buffer.getData(), slot.data, payloadSize);
+        // Slot contents fully copied out — release it back to the producer.
+        m_rxTail.store(tail + 1, std::memory_order_release);
+
         ComCfg::FrameContext frameContext;
         this->dataOut_out(0, buffer, frameContext);
 
         m_bytesReceived += payloadSize;
         this->tlmWrite_BytesReceived(m_bytesReceived);
     } else {
+        m_rxTail.store(tail + 1, std::memory_order_release);
         this->log_WARNING_HI_AllocationFailed(static_cast<FwSizeType>(payloadSize));
     }
 
-    this->tlmWrite_LastRssi(rssi);
-    this->tlmWrite_LastSnr(snr);
+    this->tlmWrite_LastRssi(m_rxRssi);
+    this->tlmWrite_LastSnr(m_rxSnr);
+
+    // Surface producer-side drops (ring full) from the component thread.
+    const U32 dropped = m_rxDropped.load(std::memory_order_relaxed);
+    if (dropped != m_rxDroppedReported) {
+        m_rxDroppedReported = dropped;
+        this->tlmWrite_RxDropped(dropped);
+        this->log_WARNING_HI_RxOverrun(dropped);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +260,9 @@ void UspRadio::deferredRxDone_internalInterfaceHandler(I16 rssi, I8 snr) {
 
 void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
                                                           const ComCfg::FrameContext& context) {
+    // This frame is now being processed — no longer pending.
+    m_pendingTxFrames.fetch_sub(1, std::memory_order_relaxed);
+
     Fw::Buffer mutableData = data;  // cast away const for dataReturnOut
     Fw::Success returnStatus = Fw::Success::FAILURE;
 
@@ -231,6 +278,8 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         // RP_TASK_STATUS_ALREADY_RUNNING → SMTC_RAC_ERROR → -EIO.
         // stopRadio() acquires its own lock window to put the chip in standby,
         // releasing the continuous-RX lock so transmitPacket() can proceed.
+        // (When the previous frame skipped its re-arm, RX is not RUNNING and
+        // this hits stopRadio's was-idle fast path — cheap.)
         (void)m_session->stopRadio();
 
         int rc = m_session->transmitPacket(data.getData(), static_cast<std::size_t>(size));
@@ -245,9 +294,17 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             this->log_WARNING_HI_SendFailed_ThrottleClear();
         }
 
-        // Re-arm continuous RX after TX
-        if (m_session->startReceive() != 0) {
-            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        // Re-arm continuous RX after TX — unless more TX frames are already
+        // queued behind this one, in which case the very next handler would
+        // immediately stopRadio() again.  The full TX→re-arm→stop→TX dance
+        // costs ~50 ms/frame and throttled saturated P3 TX to ~19 kbps vs the
+        // 33.5 kbps airtime ceiling (HWIL 2026-07-11 session 4).  Skipping is
+        // deaf-safe: the LAST queued frame sees pending == 0 and re-arms, and
+        // the DISABLING/DISABLED seams below re-arm unconditionally.
+        if (m_pendingTxFrames.load(std::memory_order_relaxed) == 0) {
+            if (m_session->startReceive() != 0) {
+                this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+            }
         }
     } else if (m_transmitState == UspTransmitState::DISABLING) {
         m_transmitState = UspTransmitState::DISABLED;
@@ -505,6 +562,7 @@ void UspRadio::flushTelemetry() {
     this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(m_policy.rxProfile()));
     this->tlmWrite_ProfileTableVersion(LINK_PROFILE_TABLE_VERSION);
     this->tlmWrite_RxReverts(m_rxReverts);
+    this->tlmWrite_RxDropped(m_rxDropped.load(std::memory_order_relaxed));
 }
 
 }  // namespace Zephyr

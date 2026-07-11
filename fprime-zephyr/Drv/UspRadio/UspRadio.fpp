@@ -135,6 +135,13 @@ module Zephyr {
         ) severity warning high \
             format "USP radio invalid profile index: {}" throttle 2
 
+        @ RX ring full when a frame arrived — frame dropped (receiver-limited
+        @ regime: frames arriving faster than the component thread drains them)
+        event RxOverrun(
+            total_dropped: U32
+        ) severity warning high \
+            format "USP radio RX ring overrun; {} frames dropped since boot" throttle 5
+
         # ------------------------------------------------------------------
         # Telemetry
         # ------------------------------------------------------------------
@@ -162,6 +169,9 @@ module Zephyr {
 
         @ Number of RX auto-reverts since boot
         telemetry RxReverts: U32 update on change
+
+        @ Received frames dropped because the RX ring was full
+        telemetry RxDropped: U32 update on change
 
         # ------------------------------------------------------------------
         # Standard AC Ports
