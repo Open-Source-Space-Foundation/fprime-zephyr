@@ -538,6 +538,13 @@ int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
 // The post-callbacks (onPostRx, onPostTx, onPostCw_trampoline) detect the abort
 // and give m_stopDoneSem.  After that the hook_id is FINISHED and
 // transmitPacket() can safely call smtc_rac_lock_radio_access.
+//
+// Return-code handling: smtc_rac_unlock_radio_access()'s return code and the
+// m_stopDoneSem wait are two independent signals that must be combined (see
+// body below) to tell "hook was already idle" apart from "rp_task_abort()
+// failed on a task that was actually RUNNING" — the latter leaves the hook
+// wedged RUNNING forever (every later smtc_rac_lock_radio_access() on it
+// returns SMTC_RAC_ERROR), so it must not be swallowed as a benign timeout.
 // ---------------------------------------------------------------------------
 
 int RalSessionImpl::stopRadio() {
@@ -545,24 +552,55 @@ int RalSessionImpl::stopRadio() {
     (void)k_sem_take(&m_stopDoneSem, K_NO_WAIT);
 
     // Abort whatever is running on this hook (RX, CW, or idle).
-    // smtc_rac_unlock_radio_access always returns SMTC_RAC_SUCCESS, so the
-    // return code does not distinguish "was running" from "already finished".
-    (void)smtc_rac_unlock_radio_access(m_radio_id);
+    // NOTE: smtc_rac_unlock_radio_access() does NOT always return
+    // SMTC_RAC_SUCCESS. It forwards the return of rp_task_abort() (see
+    // smtc_rac_abort_radio_submit() in smtc_rac.c, ~line 473): on failure it
+    // returns SMTC_RAC_ERROR. We must capture this and use it below to
+    // disambiguate "already idle" from "abort of a running task failed".
+    smtc_rac_return_code_t unlock_rc = smtc_rac_unlock_radio_access(m_radio_id);
 
     // Wait for the running task's post-callback to confirm abort.
     // If the task was already FINISHED, no post-callback fires — we use a short
     // timeout (50 ms) so we don't stall indefinitely on an already-idle radio.
     // 50 ms is >> the USP thread scheduling latency but << any real radio op.
     int ret = k_sem_take(&m_stopDoneSem, K_MSEC(50));
-    if (ret == -EAGAIN) {
-        // Radio was already idle — treat as success.
+    if (ret == 0) {
+        // Post-callback fired and confirmed the abort completed.
         return 0;
     }
-    if (ret != 0) {
-        Fw::Logger::log("[UspRadio] stopRadio: abort post-callback error %d\n", ret);
-        return -ETIMEDOUT;
+
+    if (ret == -EAGAIN) {
+        // No post-callback fired within the timeout. This is ambiguous
+        // between two very different situations, which unlock_rc lets us
+        // tell apart:
+        //
+        //   (a) "already idle" — nothing was running on this hook, so the
+        //       abort was a no-op and no post-callback was ever coming.
+        //       smtc_rac_unlock_radio_access() reports this as SUCCESS.
+        //       Benign — treat as success (previous behavior).
+        //
+        //   (b) "abort failed on a running task" — a task WAS running and
+        //       rp_task_abort() failed to abort it, so
+        //       smtc_rac_unlock_radio_access() returned SMTC_RAC_ERROR.
+        //       This is the dangerous case: the RAC hook is left RUNNING,
+        //       and every later smtc_rac_lock_radio_access() on this hook
+        //       will return SMTC_RAC_ERROR (rc=1) forever — the radio is
+        //       permanently dead until reboot. Do NOT silently swallow
+        //       this; surface it distinctly so callers/logs can catch it
+        //       before the next lock attempt fails mysteriously.
+        if (unlock_rc != SMTC_RAC_SUCCESS) {
+            Fw::Logger::log(
+                "[UspRadio] stopRadio: abort FAILED on radio_id=%" PRIu8
+                " (unlock_rc=%d) - RAC hook likely wedged RUNNING\n",
+                m_radio_id, static_cast<int>(unlock_rc));
+            return -EIO;
+        }
+        // (a) Radio was already idle — treat as success.
+        return 0;
     }
-    return 0;
+
+    Fw::Logger::log("[UspRadio] stopRadio: abort post-callback error %d\n", ret);
+    return -ETIMEDOUT;
 }
 
 }  // namespace Zephyr
