@@ -42,7 +42,8 @@ UspRadio::UspRadio(const char* compName)
       m_rxSnr(0),
       m_bytesSent(0),
       m_bytesReceived(0),
-      m_rxReverts(0) {}
+      m_rxReverts(0),
+      m_revertRearmPending(false) {}
 
 UspRadio::~UspRadio() {}
 
@@ -125,18 +126,40 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
         U8 fromProfile = m_policy.pendingRxProfile();  // saved "from" before revert
         U8 toProfile   = m_policy.rxProfile();
 
-        // Apply the reverted profile to the radio hardware
-        (void)applyProfile(toProfile, UspRadioDirection::RX);
-        if (m_session->startReceive() != 0) {
-            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-        }
-
         ++m_rxReverts;
         this->log_WARNING_LO_ProfileReverted(
             static_cast<LinkProfileId::T>(fromProfile),
             static_cast<LinkProfileId::T>(toProfile));
         this->tlmWrite_RxReverts(m_rxReverts);
         this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(toProfile));
+
+        // tick() has already committed the revert in the policy (rxProfile =
+        // boot default, pending cleared) — only the HARDWARE apply remains.
+        // Mark it pending and perform it below so a busy radio retries on
+        // subsequent ticks instead of dropping the revert (HWIL 2026-07-11
+        // slice-13: without this the revert was cosmetic — telemetry said P0
+        // while the chip stayed configured and armed on the old profile).
+        m_revertRearmPending = true;
+    }
+
+    if (m_revertRearmPending) {
+        // Mirror the deferredSetRxProfile discipline: the reverted-FROM
+        // profile's continuous RX still holds the RAC lock (RUNNING), so
+        // stopRadio() must succeed before applyProfile()/startReceive() can.
+        // Honor its rc (751a1a8 semantics); there is no external retry for a
+        // revert, so on failure keep the flag set and retry next tick.
+        if (m_session->stopRadio() != 0) {
+            this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
+            return;
+        }
+        if (!applyProfile(m_policy.rxProfile(), UspRadioDirection::RX)) {
+            return;  // ConfigurationFailed logged by applyProfile; retry next tick
+        }
+        if (m_session->startReceive() != 0) {
+            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+            return;  // retry next tick
+        }
+        m_revertRearmPending = false;
     }
 }
 
@@ -331,7 +354,11 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
         (void)applyProfile(idx, UspRadioDirection::RX);
         if (m_session->startReceive() != 0) {
             this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+            return;
         }
+        // RX is now armed on an explicitly requested profile — supersedes any
+        // pending revert hardware re-arm.
+        m_revertRearmPending = false;
         return;
     }
     // kApplyRx — stop continuous RX (which holds the RAC lock open in RUNNING
@@ -361,6 +388,10 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
     }
     if (m_session->startReceive() != 0) {
         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+    } else {
+        // RX is now armed on an explicitly requested profile — supersedes any
+        // pending revert hardware re-arm.
+        m_revertRearmPending = false;
     }
     this->log_ACTIVITY_HI_ProfileChanged(UspRadioDirection::RX, profile);
     this->tlmWrite_RxProfile(profile);

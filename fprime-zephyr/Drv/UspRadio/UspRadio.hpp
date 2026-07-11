@@ -141,6 +141,14 @@ class UspRadio final : public UspRadioComponentBase {
     FwSizeType m_bytesSent;
     FwSizeType m_bytesReceived;
     U32        m_rxReverts;
+
+    //! True when ProfilePolicy has committed an RX auto-revert but the
+    //! hardware apply (stopRadio → applyProfile → startReceive) has not yet
+    //! succeeded — retried on each run tick.  tick() commits the revert
+    //! irreversibly before returning kRevert, so this flag is the only record
+    //! that the chip still needs re-programming.  Cleared by a successful
+    //! explicit SET_RX_PROFILE apply (which supersedes the revert re-arm).
+    bool m_revertRearmPending;
 };
 
 }  // namespace Zephyr
