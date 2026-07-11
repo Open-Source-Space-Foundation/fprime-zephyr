@@ -130,6 +130,17 @@ class RalSessionImpl final : public RalSession {
     TxScratch    m_txScratch;
     ApplyScratch m_applyScratch;
 
+    // Last-applied packet params, kept so onPreTx can re-issue them with the
+    // TRUE payload length before each transmit and onPreRx can restore the
+    // profile's max-length value before each RX arm.  The SX126x takes its
+    // transmit length (and the explicit-header / GFSK length-byte value) from
+    // SetPacketParams — ral_set_pkt_payload only writes the FIFO — and in
+    // GFSK variable-length RX pld_len_in_bytes acts as the max-accepted
+    // payload filter.
+    ral_pkt_type_t        m_pktType;
+    ral_lora_pkt_params_t m_loraPktParams;
+    ral_gfsk_pkt_params_t m_gfskPktParams;
+
     // Receive scratchpad (filled by the USP thread in RX IRQ callback)
     static constexpr std::size_t MAX_RX_BUF = 255;
     uint8_t     m_rxBuf[MAX_RX_BUF];
