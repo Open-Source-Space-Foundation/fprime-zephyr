@@ -44,6 +44,7 @@ UspRadio::UspRadio(const char* compName)
       m_rxRssi(0),
       m_rxSnr(0),
       m_pendingTxFrames(0),
+      m_rearmAfterTx(false),
       m_bytesSent(0),
       m_bytesReceived(0),
       m_rxReverts(0),
@@ -294,18 +295,13 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             this->log_WARNING_HI_SendFailed_ThrottleClear();
         }
 
-        // Re-arm continuous RX after TX — unless more TX frames are already
-        // queued behind this one, in which case the very next handler would
-        // immediately stopRadio() again.  The full TX→re-arm→stop→TX dance
-        // costs ~50 ms/frame and throttled saturated P3 TX to ~19 kbps vs the
-        // 33.5 kbps airtime ceiling (HWIL 2026-07-11 session 4).  Skipping is
-        // deaf-safe: the LAST queued frame sees pending == 0 and re-arms, and
-        // the DISABLING/DISABLED seams below re-arm unconditionally.
-        if (m_pendingTxFrames.load(std::memory_order_relaxed) == 0) {
-            if (m_session->startReceive() != 0) {
-                this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-            }
-        }
+        // Re-arm continuous RX after TX — deferred to the tail of this
+        // handler, AFTER comStatusOut releases the com pipeline.  The com
+        // protocol is one-in-flight (comQueue holds the next frame until it
+        // sees our comStatus), so at this point m_pendingTxFrames is ALWAYS 0
+        // and an inline skip check never fires (HWIL 2026-07-11 r5).  See the
+        // rearm block below.
+        m_rearmAfterTx = true;
     } else if (m_transmitState == UspTransmitState::DISABLING) {
         m_transmitState = UspTransmitState::DISABLED;
         // TX episode over — guarantee continuous RX is armed (HWIL 2026-07-11:
@@ -319,6 +315,28 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
 
     this->dataReturnOut_out(0, mutableData, context);
     this->comStatusOut_out(0, returnStatus);
+
+    if (m_rearmAfterTx) {
+        m_rearmAfterTx = false;
+        // comStatus is out — if the com pipeline has another frame, it is on
+        // its way to dataIn (on-board port chain through comQueue/framer,
+        // typically < a few ms).  Give it a short bounded window; if a frame
+        // shows up, skip the re-arm entirely: the TX→re-arm→stop→TX dance
+        // costs ~50 ms/frame and throttled saturated P3 TX to ~19 kbps vs the
+        // 33.5 kbps airtime ceiling (HWIL 2026-07-11 sessions 4/5).  Deaf-
+        // safe: the episode's final frame exhausts the window and re-arms,
+        // and the DISABLING/DISABLED seams re-arm unconditionally.
+#ifdef __ZEPHYR__
+        for (int i = 0; (i < 5) && (m_pendingTxFrames.load(std::memory_order_relaxed) == 0); i++) {
+            k_sleep(K_MSEC(1));
+        }
+#endif
+        if (m_pendingTxFrames.load(std::memory_order_relaxed) == 0) {
+            if (m_session->startReceive() != 0) {
+                this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
