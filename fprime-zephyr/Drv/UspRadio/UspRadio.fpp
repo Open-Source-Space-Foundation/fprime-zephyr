@@ -107,6 +107,16 @@ module Zephyr {
         ) severity warning high \
             format "USP radio configuration failed for direction: {}" throttle 2
 
+        @ Deferred profile change (SET_TX_PROFILE/SET_RX_PROFILE) could not be
+        @ applied because the radio is busy (e.g. TX actively saturating the
+        @ RAC hook) and stopRadio() could not abort it before its deadline.
+        @ The change is left pending; retry once the radio quiesces (e.g.
+        @ after TRANSMIT DISABLED) rather than resending immediately.
+        event ProfileChangeDeferred(
+            direction: UspRadioDirection
+        ) severity warning low \
+            format "USP radio {} profile change deferred: radio busy" throttle 2
+
         @ Packet transmit failed with RAL status code
         event SendFailed(
             status: I32

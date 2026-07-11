@@ -265,8 +265,17 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         return;
     }
     // Stop continuous RX before applying a new TX profile (same ALREADY_RUNNING
-    // guard as CW and deferredSetRxProfile).
-    (void)m_session->stopRadio();
+    // guard as CW and deferredSetRxProfile).  If TX is actively saturating the
+    // RAC hook (rate group feeding frames back-to-back), stopRadio() cannot
+    // abort it within its deadline and returns non-zero; applyProfile() would
+    // then be guaranteed to fail the same way (ALREADY_RUNNING), so skip the
+    // attempt rather than spam ConfigurationFailed every cycle.  m_txProfile
+    // is already recorded in the policy above; a later SET_TX_PROFILE retry
+    // (e.g. once TX is disabled or quiesces) will apply it to hardware.
+    if (m_session->stopRadio() != 0) {
+        this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::TX);
+        return;
+    }
     (void)applyProfile(idx, UspRadioDirection::TX);
     this->tlmWrite_TxProfile(profile);
 }
@@ -290,7 +299,24 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
     // state), apply the new profile, then re-arm RX.  Without stopRadio(),
     // applyProfile() → smtc_rac_lock_radio_access returns ALREADY_RUNNING →
     // SMTC_RAC_ERROR → failure, silently leaving the profile unchanged.
-    (void)m_session->stopRadio();
+    //
+    // If TX is actively saturating the RAC hook (rate group feeding frames
+    // back-to-back), stopRadio() cannot abort it within its deadline and
+    // returns non-zero; applyProfile() would then be guaranteed to fail the
+    // same way.  Previously this fell through to applyProfile() anyway, which
+    // failed, logged ConfigurationFailed, and left the caller to retry
+    // indefinitely — every retry repeating the same failed stopRadio() +
+    // applyProfile() pair once every ~25 s until TRANSMIT was disabled.
+    // Skip the attempt instead: the pending profile + revert deadline armed
+    // by setRxProfile() above are left completely untouched, so (a) the
+    // auto-revert timer still fires on schedule if the change never lands
+    // before revert_s elapses, and (b) a later SET_RX_PROFILE retry (or the
+    // next tick once TX quiesces) re-attempts the apply with fresh state —
+    // no revert bookkeeping is corrupted either way.
+    if (m_session->stopRadio() != 0) {
+        this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
+        return;
+    }
     if (!applyProfile(idx, UspRadioDirection::RX)) {
         return;
     }
