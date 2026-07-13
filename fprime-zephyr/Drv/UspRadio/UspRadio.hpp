@@ -119,6 +119,12 @@ class UspRadio final : public UspRadioComponentBase {
     //! @returns true on success.
     bool applyProfile(U8 idx, UspRadioDirection direction);
 
+    //! True when the RadioHead-compat shim applies for the given profile:
+    //! the RADIOHEAD_COMPAT parameter is set AND the profile is LoRa (GFSK
+    //! never carried the RadioHead header on any legacy path).  An unloaded
+    //! parameter reads as compat-enabled — the safe default for the fleet.
+    bool radioHeadCompatFor(U8 profileIdx);
+
     //! Monotonic millisecond timestamp (wraps Os::Queue / Zephyr k_uptime_get)
     uint64_t nowMs() const;
 
@@ -173,6 +179,12 @@ class UspRadio final : public UspRadioComponentBase {
     //! after comStatusOut has released the one-in-flight com pipeline (so a
     //! queued next frame has a chance to reach dataIn and suppress the re-arm).
     bool              m_rearmAfterTx;
+
+    //! TX staging buffer for RadioHead-compat mode (header + payload).
+    //! Sized to the on-air cap: compat mode limits the payload to
+    //! MAX_PACKET_SIZE - 4 so header + payload always fits.  Component-thread
+    //! only (written and consumed inside deferredTxPacket).
+    U8                m_txScratch[MAX_PACKET_SIZE];
 
     // Telemetry accumulators
     FwSizeType m_bytesSent;
