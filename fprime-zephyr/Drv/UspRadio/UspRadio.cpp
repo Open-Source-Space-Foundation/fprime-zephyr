@@ -18,6 +18,7 @@
 
 #include "fprime-zephyr/Drv/UspRadio/UspRadio.hpp"
 #include "fprime-zephyr/Drv/UspRadio/LinkProfiles.hpp"
+#include "fprime-zephyr/Drv/UspRadio/RadioHeadShim.hpp"
 
 #include <Fw/Logger/Logger.hpp>
 #include <cstring>
@@ -223,24 +224,38 @@ void UspRadio::deferredRxDone_internalInterfaceHandler(I16 /*rssi*/, I8 /*snr*/)
         this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(m_policy.rxProfile()));
     }
 
-    // Allocate and dispatch the received frame
-    const FwSizeType payloadSize = slot.len;
     m_rxRssi = slot.rssi;
     m_rxSnr  = slot.snr;
-    Fw::Buffer buffer = this->allocate_out(0, payloadSize);
-    if (buffer.isValid()) {
-        (void)::memcpy(buffer.getData(), slot.data, payloadSize);
-        // Slot contents fully copied out — release it back to the producer.
-        m_rxTail.store(tail + 1, std::memory_order_release);
 
-        ComCfg::FrameContext frameContext;
-        this->dataOut_out(0, buffer, frameContext);
+    // Locate the deliverable payload within the on-air packet.  In
+    // RadioHead-compat mode the first 4 bytes are the peer's RadioHead
+    // header (see RadioHeadShim.hpp) — strip them.  A header-only runt
+    // carries no payload: consume the slot without delivering (it still
+    // confirmed the RX profile above — it was a valid frame on this profile).
+    const bool rhCompat = this->radioHeadCompatFor(m_policy.rxProfile());
+    U32 payloadOffset = 0;
+    U32 payloadLen = 0;
+    if (RadioHeadShim::locateRxPayload(static_cast<U32>(slot.len), rhCompat,
+                                       payloadOffset, payloadLen)) {
+        // Allocate and dispatch the received frame
+        const FwSizeType payloadSize = static_cast<FwSizeType>(payloadLen);
+        Fw::Buffer buffer = this->allocate_out(0, payloadSize);
+        if (buffer.isValid()) {
+            (void)::memcpy(buffer.getData(), slot.data + payloadOffset, payloadSize);
+            // Slot contents fully copied out — release it back to the producer.
+            m_rxTail.store(tail + 1, std::memory_order_release);
 
-        m_bytesReceived += payloadSize;
-        this->tlmWrite_BytesReceived(m_bytesReceived);
+            ComCfg::FrameContext frameContext;
+            this->dataOut_out(0, buffer, frameContext);
+
+            m_bytesReceived += payloadSize;
+            this->tlmWrite_BytesReceived(m_bytesReceived);
+        } else {
+            m_rxTail.store(tail + 1, std::memory_order_release);
+            this->log_WARNING_HI_AllocationFailed(payloadSize);
+        }
     } else {
         m_rxTail.store(tail + 1, std::memory_order_release);
-        this->log_WARNING_HI_AllocationFailed(static_cast<FwSizeType>(payloadSize));
     }
 
     this->tlmWrite_LastRssi(m_rxRssi);
@@ -268,9 +283,15 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
     Fw::Success returnStatus = Fw::Success::FAILURE;
 
     if (m_transmitState == UspTransmitState::ENABLED) {
+        // RadioHead-compat shim (see RadioHeadShim.hpp): legacy peers expect a
+        // 4-byte header on every LoRa frame; it consumes on-air budget, so the
+        // payload cap shrinks accordingly (252 → 248 = TmFrameFixedSize).
+        const bool rhCompat = this->radioHeadCompatFor(m_policy.txProfile());
+        const FwSizeType maxPayload = static_cast<FwSizeType>(
+            RadioHeadShim::maxPayload(static_cast<U32>(MAX_PACKET_SIZE), rhCompat));
         FwSizeType size = data.getSize();
-        if (size > MAX_PACKET_SIZE) {
-            size = MAX_PACKET_SIZE;  // truncate; Phase 5 will validate framing
+        if (size > maxPayload) {
+            size = maxPayload;  // truncate; Phase 5 will validate framing
         }
 
         // Stop continuous RX before TX.  startReceive() holds the RAC lock
@@ -283,11 +304,23 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         // this hits stopRadio's was-idle fast path — cheap.)
         (void)m_session->stopRadio();
 
-        int rc = m_session->transmitPacket(data.getData(), static_cast<std::size_t>(size));
+        // Compat mode stages header + payload in m_txScratch; raw mode
+        // transmits the frame buffer directly (no copy).
+        const U8* txData = data.getData();
+        std::size_t txSize = static_cast<std::size_t>(size);
+        if (rhCompat) {
+            txSize = static_cast<std::size_t>(
+                RadioHeadShim::buildTxPacket(data.getData(), static_cast<U32>(size), m_txScratch));
+            txData = m_txScratch;
+        }
+
+        int rc = m_session->transmitPacket(txData, txSize);
         if (rc != 0) {
             this->log_WARNING_HI_SendFailed(static_cast<I32>(rc));
             returnStatus = Fw::Success::FAILURE;
         } else {
+            // Payload bytes only (header excluded) — keeps BytesSent/BytesReceived
+            // parity checks meaningful across compat and raw peers.
             m_bytesSent += size;
             this->tlmWrite_BytesSent(m_bytesSent);
             returnStatus = Fw::Success::SUCCESS;
@@ -560,6 +593,24 @@ bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction) {
     LinkProfileId profileId = static_cast<LinkProfileId::T>(idx);
     this->log_ACTIVITY_HI_ProfileChanged(direction, profileId);
     return true;
+}
+
+bool UspRadio::radioHeadCompatFor(U8 profileIdx) {
+    // The RadioHead header is a LoRa-ecosystem convention (RadioHead /
+    // adafruit_rfm9x / legacy Zephyr::LoRa); GFSK profiles are USP-only
+    // links and are always raw regardless of the parameter.
+    if ((profileIdx >= LINK_PROFILE_COUNT) ||
+        (LINK_PROFILE_TABLE[profileIdx].mod != ModKind::LORA)) {
+        return false;
+    }
+    Fw::ParamValid valid;
+    const bool compat = this->paramGet_RADIOHEAD_COMPAT(valid);
+    if ((valid != Fw::ParamValid::VALID) && (valid != Fw::ParamValid::DEFAULT)) {
+        // Parameter not loaded (shouldn't happen: topology loads parameters
+        // before startRadio) — fail toward compat, the fleet-safe default.
+        return true;
+    }
+    return compat;
 }
 
 uint64_t UspRadio::nowMs() const {

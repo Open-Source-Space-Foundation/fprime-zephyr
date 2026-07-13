@@ -62,6 +62,20 @@ module Zephyr {
         ) priority 10
 
         # ------------------------------------------------------------------
+        # Parameters
+        # ------------------------------------------------------------------
+
+        @ RadioHead-header backwards compatibility for the UHF LoRa link.
+        @ When true (default), TX prepends the 4-byte RadioHead-style header
+        @ ({0,0,0,0}, byte-identical to legacy Zephyr::LoRa / LoRaConfig::HEADER)
+        @ and RX strips the first 4 bytes of every received LoRa frame — required
+        @ to interoperate with legacy Zephyr::LoRa peers and RadioHead-based
+        @ ground radios (e.g. the CI adafruit_rfm9x passthrough board).
+        @ Set false for raw F´ frames on the air (USP<->USP links only; both ends
+        @ must agree).  Applies to LoRa profiles only; GFSK profiles are always raw.
+        param RADIOHEAD_COMPAT: bool default true
+
+        # ------------------------------------------------------------------
         # Commands - verbatim from LoRa.fpp + profile commands
         # ------------------------------------------------------------------
 
