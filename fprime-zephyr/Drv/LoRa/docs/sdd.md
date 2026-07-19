@@ -46,8 +46,11 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 
 | Name | Description |
 |------|---|
-| DATA_RATE   | Spreading factor / data rate for radio |
-| CODING_RATE | Number of parity bits sent             |
+| DATA_RATE       | Spreading factor / data rate for radio |
+| CODING_RATE     | Number of parity bits sent             |
+| BANDWIDTH_TX    | Bandwidth used when transmitting       |
+| BANDWIDTH_RX    | Bandwidth used when receiving          |
+| TRANSMIT_ENABLE | Enable/disable transmission (com-status ping-pong) |
 
 ## Telemetry
 

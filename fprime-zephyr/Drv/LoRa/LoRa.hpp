@@ -34,13 +34,19 @@ class LoRa final : public LoRaComponentBase {
     static void receiveCallback(const struct device* dev, U8* data, U16 size, I16 rssi, I8 snr, void* user_data);
 
     //! Configure LoRa radio the supplied device and start it
-    Status start(const struct device* lora_device, const TransmitState& transmit_enabled);
+    //!
+    //! Applies runtime transmit state from the TRANSMIT_ENABLE parameter. Prefer loading
+    //! parameters before calling start().
+    Status start(const struct device* lora_device);
+
+    //! Configure LoRa radio and set TRANSMIT_ENABLE (updates the local parameter)
+    Status start(const struct device* lora_device, TransmitEnable transmit_enabled);
 
     //! Enable tx
     Status enableTx();
 
     //! Enable rx
-    Status enableRx(bool initial=false);
+    Status enableRx(bool initial = false);
 
   private:
     // ----------------------------------------------------------------------
@@ -81,16 +87,20 @@ class LoRa final : public LoRaComponentBase {
                                     U32 cmdSeq,           //!< The command sequence number
                                     U16 seconds) override;
 
-    //! Handler implementation for command TRANSMIT
-    //!
-    //! Start/stop transmission on the LoRa module
-    void TRANSMIT_cmdHandler(FwOpcodeType opCode,  //!< The opcode
-                             U32 cmdSeq,           //!< The command sequence number
-                             TransmitState enabled) override;
+    // ----------------------------------------------------------------------
+    // Parameter handlers
+    // ----------------------------------------------------------------------
 
-    //! Set the transmit state of the LoRa component
-    //! Used by the TRANSMIT command and the enable/disable transmit port handlers
+    //! Called when a parameter is updated (e.g. via PRM_SET)
+    void parameterUpdated(FwPrmIdType id  //!< The parameter ID
+                          ) override;
+
+    //! Set the runtime transmit state of the LoRa component
+    //! Used by parameter updates and the enable/disable transmit port handlers
     void setTransmitState(TransmitState state);
+
+    //! Sync TRANSMIT_ENABLE parameter and apply runtime transmit state
+    void setTransmitEnable(TransmitEnable enable);
 
   private:
     U8 m_send_buffer[LoRa::MAX_PACKET_SIZE];  //!< Buffer for sending data (max LoRa packet size)
@@ -104,11 +114,11 @@ class LoRa final : public LoRaComponentBase {
 
     //! Pointer to the LoRa device
     const struct device* m_lora_device;
-    Zephyr::TransmitState m_transmit_enabled;  //!< Transmit enabled state
-    Os::Mutex m_mutex;  //!< Mutex for thread safety
+    Zephyr::TransmitState m_transmit_enabled;  //!< Runtime transmit state (includes DISABLING)
+    Os::Mutex m_mutex;                         //!< Mutex for thread safety
 
-    FwSizeType m_bytes_sent = 0;     //!< Total bytes sent telemetry
-    FwSizeType m_bytes_received = 0; //!< Total bytes received telemetry
+    FwSizeType m_bytes_sent = 0;      //!< Total bytes sent telemetry
+    FwSizeType m_bytes_received = 0;  //!< Total bytes received telemetry
 };
 
 }  // namespace Zephyr
