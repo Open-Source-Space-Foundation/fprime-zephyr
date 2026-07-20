@@ -80,6 +80,9 @@ module Zephyr {
         @ Last received SNR
         telemetry LastSnr: I8 update on change
 
+        @ Radio module mode
+        telemetry ModuleMode: Zephyr.LoRaMode
+
         ###############################################################################
         # Standard AC Ports: Required for Channels, Events, Commands, and Parameters  #
         ###############################################################################
