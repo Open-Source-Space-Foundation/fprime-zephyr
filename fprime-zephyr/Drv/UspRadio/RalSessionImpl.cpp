@@ -72,10 +72,10 @@ RalSessionImpl::RalSessionImpl(uint32_t freq_hz, int8_t tx_power_dbm)
       m_ral(nullptr),
       m_ralf(nullptr),
       m_initialized(false),
+      m_pktType(RAL_PKT_TYPE_LORA),
       m_rxLen(0),
       m_rxRssi(0),
-      m_rxSnr(0),
-      m_pktType(RAL_PKT_TYPE_LORA) {
+      m_rxSnr(0) {
     m_txScratch = {};
     m_applyScratch = {};
     m_loraPktParams = {};
