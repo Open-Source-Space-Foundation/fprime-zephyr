@@ -19,7 +19,7 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 | LORA-07 | The LoRa component shall wrap the Zephyr LoRa driver | Unit-Test |
 | LORA-08 | The LoRa component shall configure the Zephyr LoRa driver for transmit only when sending data | Unit-Test |
 | LORA-09 | The LoRa component shall expose enableTransmit and disableTransmit ports to control transmission | Unit-Test |
-| LORA-10 | Updating TRANSMIT_ENABLE (parameter set or ports) shall enable or disable the com-status ping-pong | Unit-Test |
+| LORA-10 | The TRANSMIT command and enableTransmit/disableTransmit ports shall enable or disable the com-status ping-pong | Unit-Test |
 
 
 ## Port Interfaces
@@ -28,8 +28,8 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 |---|---|
 | Svc.Com | Interface to plug the radio into the communication stack |
 | Svc.BufferAllocation | Buffer allocation interface for received data |
-| enableTransmit | `Fw.Signal` input: enable LoRa transmission (sets `TRANSMIT_ENABLE` and starts com-status ping-pong) |
-| disableTransmit | `Fw.Signal` input: disable LoRa transmission (sets `TRANSMIT_ENABLE` and stops ping-pong via `DISABLING`) |
+| enableTransmit | `Fw.Signal` input: enable LoRa transmission (starts com-status ping-pong) |
+| disableTransmit | `Fw.Signal` input: disable LoRa transmission (stops ping-pong via `DISABLING`) |
 
 
 ## Configuration
@@ -46,15 +46,16 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 | Name | Description |
 |------|---|
 | CONTINUOUS_WAVE | Send continuous wave for a supplied duration |
-
-> Note: The former `TRANSMIT` command was removed. Use the `TRANSMIT_ENABLE` parameter or the `enableTransmit` / `disableTransmit` ports instead.
+| TRANSMIT | Enable/disable transmission (com-status ping-pong). Runtime state may briefly be `DISABLING` while an in-flight send completes. |
 
 ## Parameters
 
 | Name | Description |
 |------|---|
-| DATA_RATE   | Spreading factor / data rate for radio |
-| CODING_RATE | Number of parity bits sent             |
+| DATA_RATE    | Spreading factor / data rate for radio |
+| CODING_RATE  | Number of parity bits sent             |
+| BANDWIDTH_TX | Bandwidth used when transmitting       |
+| BANDWIDTH_RX | Bandwidth used when receiving          |
 
 ## Telemetry
 
