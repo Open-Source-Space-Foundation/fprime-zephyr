@@ -17,7 +17,9 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 | LORA-05 | The LoRa component shall support the Svc.Com interface | Unit-Test |
 | LORA-06 | The LoRa component shall have a continuous wave command | Unit-Test |
 | LORA-07 | The LoRa component shall wrap the Zephyr LoRa driver | Unit-Test |
-| LORA-08 | The LoRa component shall configure the Zephyr LoRa driver for tranmit only when sending data | Unit-Test |
+| LORA-08 | The LoRa component shall configure the Zephyr LoRa driver for transmit only when sending data | Unit-Test |
+| LORA-09 | The LoRa component shall expose enableTransmit and disableTransmit ports to control transmission | Unit-Test |
+| LORA-10 | Updating TRANSMIT_ENABLE (parameter set or ports) shall enable or disable the com-status ping-pong | Unit-Test |
 
 
 ## Port Interfaces
@@ -25,6 +27,9 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 | Name | Description |
 |---|---|
 | Svc.Com | Interface to plug the radio into the communication stack |
+| Svc.BufferAllocation | Buffer allocation interface for received data |
+| enableTransmit | `Fw.Signal` input: enable LoRa transmission (sets `TRANSMIT_ENABLE` and starts com-status ping-pong) |
+| disableTransmit | `Fw.Signal` input: disable LoRa transmission (sets `TRANSMIT_ENABLE` and stops ping-pong via `DISABLING`) |
 
 
 ## Configuration
@@ -42,6 +47,8 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 |------|---|
 | CONTINUOUS_WAVE | Send continuous wave for a supplied duration |
 
+> Note: The former `TRANSMIT` command was removed. Use the `TRANSMIT_ENABLE` parameter or the `enableTransmit` / `disableTransmit` ports instead.
+
 ## Parameters
 
 | Name | Description |
@@ -50,14 +57,16 @@ This is used as a radio in the F Prime communication stack transmitting via the 
 | CODING_RATE     | Number of parity bits sent             |
 | BANDWIDTH_TX    | Bandwidth used when transmitting       |
 | BANDWIDTH_RX    | Bandwidth used when receiving          |
-| TRANSMIT_ENABLE | Enable/disable transmission (com-status ping-pong) |
+| TRANSMIT_ENABLE | Enable/disable transmission (com-status ping-pong). Default: `DISABLED`. Runtime state may briefly be `DISABLING` while an in-flight send completes. |
 
 ## Telemetry
 
 | Name | Description |
 |---|---|
-| LastRssi | RSSI value of last receive |
-| LastSnr  | SNR value of last receive  |
+| BytesSent     | Total bytes sent |
+| BytesReceived | Total bytes received |
+| LastRssi      | RSSI value of last receive |
+| LastSnr       | SNR value of last receive  |
 
 ## Events
 
