@@ -105,6 +105,26 @@ namespace Zephyr {
         //! Report any new RX ring-buffer overruns since the last report (called
         //! from schedIn_handler, i.e. normal task context -- never from the ISR).
         void reportRxOverrunsIfAny();
+
+        // issue #457: ISR-level RX back-pressure (GRC-proven pattern, RAM-neutral
+        // -- ring stays 1024B, no growth). Previously the RX ISR would keep
+        // pulling bytes out of the UART/USB-CDC hardware FIFO and silently drop
+        // them on the floor once m_ring_buf was full (see the old
+        // RxRingBufferOverrun path). Now, once the ring is full, the ISR
+        // disables its own RX interrupt instead of reading further -- the
+        // USB-CDC stack then NAKs the host's bulk-OUT endpoint, so unread bytes
+        // queue up in the HOST's USB stack (true end-to-end flow control)
+        // rather than being lost. schedIn_handler re-enables RX once it has
+        // freed ring space. This means even a multi-hundred-ms stall elsewhere
+        // in the system (e.g. a flash erase/program stalling XIP) is survivable
+        // -- the host simply waits longer, nothing is dropped.
+        //
+        // volatile: written by the ISR (serial_cb), read/cleared by
+        // schedIn_handler (normal task context). Only ever transitions
+        // false->true in the ISR and true->false in schedIn_handler, so there is
+        // no read-modify-write race -- a plain volatile bool is sufficient
+        // (no atomic needed for a single-writer-per-direction flag like this).
+        volatile bool m_rx_paused;
     };
 
 } // end namespace Zephyr

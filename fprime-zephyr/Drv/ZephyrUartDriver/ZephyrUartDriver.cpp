@@ -23,6 +23,7 @@ namespace Zephyr {
     {
         atomic_set(&this->m_rx_overrun_count, 0);
         this->m_rx_overrun_count_reported = 0;
+        this->m_rx_paused = false;
     }
 
     ZephyrUartDriver ::
@@ -73,19 +74,32 @@ namespace Zephyr {
             return;
         }
 
+        // issue #457: ISR-level RX back-pressure (GRC-proven pattern). Only pull
+        // a byte out of the hardware FIFO if the ring buffer actually has room
+        // for it. Once the ring is full, stop reading and disable the RX
+        // interrupt entirely -- for a USB-CDC-backed UART this makes the
+        // underlying stack NAK the host's bulk-OUT endpoint, so unread bytes
+        // queue up in the HOST's USB stack instead of being dropped here. This
+        // is true end-to-end flow control: previously, once the ring filled,
+        // this loop kept draining the hardware FIFO anyway and threw the bytes
+        // away (see the old RxRingBufferOverrun counter below), which is what
+        // silently corrupted uplinks. schedIn_handler re-enables RX once it has
+        // freed ring space.
         U8 c;
-        // TODO: Get rid of the endless loop (in an IRQ handler!).
-        while (uart_fifo_read(dev, &c, 1) == 1) {
+        while (ring_buf_space_get(&self->m_ring_buf) > 0) {
+            if (uart_fifo_read(dev, &c, 1) != 1) {
+                break;  // Hardware FIFO drained; nothing more to read right now.
+            }
+            // Space was just confirmed above, so this put cannot fail -- but
+            // keep the old counting path too as a should-never-fire-now
+            // tripwire in case of a future regression.
             if (ring_buf_put(&self->m_ring_buf, &c, 1) != 1) {
-                // issue #457: this used to be a bare printk with no visibility
-                // to the rest of the system -- a dropped byte here silently
-                // desyncs whatever frame was in flight (deframer/uplink mode
-                // machine confusion downstream). Count it; schedIn_handler
-                // (normal task context, not ISR) turns this into an F' event +
-                // telemetry channel. atomic_inc is ISR-safe and RAM-neutral
-                // (single word).
                 atomic_inc(&self->m_rx_overrun_count);
             }
+        }
+        if (ring_buf_space_get(&self->m_ring_buf) == 0) {
+            uart_irq_rx_disable(dev);
+            self->m_rx_paused = true;
         }
     }
 
@@ -120,6 +134,17 @@ namespace Zephyr {
             }
             recv_buffer.setSize(recv_size);
             recv_out(0, recv_buffer, Drv::ByteStreamStatus::OP_OK);
+        }
+
+        // issue #457: if the RX ISR paused itself for back-pressure (ring was
+        // full) and draining above has since freed room, resume RX. If the
+        // ring is still full (e.g. commsBufferManager's pool is exhausted so
+        // allocate_out() keeps failing and the drain loop can't make progress),
+        // RX correctly stays paused/back-pressured until room frees up --
+        // that's the flow control working as intended, not a bug.
+        if (this->m_rx_paused && (ring_buf_space_get(&this->m_ring_buf) > 0)) {
+            this->m_rx_paused = false;
+            uart_irq_rx_enable(this->m_dev);
         }
 
         this->reportRxOverrunsIfAny();
