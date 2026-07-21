@@ -36,7 +36,7 @@ LoRa ::LoRa(const char* const compName) : LoRaComponentBase(compName), m_transmi
 
 LoRa ::~LoRa() {}
 
-LoRa::Status LoRa ::start(const struct device* lora_device) {
+LoRa::Status LoRa ::start(const struct device* lora_device, const TransmitState& transmit_enabled) {
     this->m_lora_device = lora_device;
     FW_ASSERT(lora_device != nullptr);
     if (!device_is_ready(lora_device)) {
@@ -48,20 +48,14 @@ LoRa::Status LoRa ::start(const struct device* lora_device) {
         this->log_WARNING_HI_ConfigurationFailed(LoRaMode::Receive);
         return LoRa::Status::ERROR;
     }
-    // Apply transmit enable from parameter (default or loaded via loadParameters)
-    Fw::ParamValid valid = Fw::ParamValid::INVALID;
-    const TransmitEnable enable = this->paramGet_TRANSMIT_ENABLE(valid);
-    FW_ASSERT((valid == Fw::ParamValid::VALID) || (valid == Fw::ParamValid::DEFAULT),
-              static_cast<FwAssertArgType>(valid));
-    this->setTransmitState(enable == TransmitEnable::ENABLED ? TransmitState::ENABLED : TransmitState::DISABLED);
+    // On start, if the transmit is enabled then start the com status ping-pong transmit protocol
+    this->m_transmit_enabled = transmit_enabled;
+    if (transmit_enabled == TransmitState::ENABLED) {
+        Fw::Success status = Fw::Success::SUCCESS;
+        this->comStatusOut_out(0, status);
+    }
 
     return Status::SUCCESS;
-}
-
-LoRa::Status LoRa ::start(const struct device* lora_device, TransmitEnable transmit_enabled) {
-    // Set parameter first; one-arg start configures the radio then applies runtime state
-    this->paramSet_TRANSMIT_ENABLE(transmit_enabled, Fw::ParamValid::VALID);
-    return this->start(lora_device);
 }
 
 LoRa::Status LoRa ::enableTx() {
@@ -166,11 +160,11 @@ void LoRa ::dataReturnIn_handler(FwIndexType portNum, Fw::Buffer& data, const Co
 }
 
 void LoRa ::enableTransmit_handler(FwIndexType portNum) {
-    this->setTransmitEnable(TransmitEnable::ENABLED);
+    this->setTransmitState(TransmitState::ENABLED);
 }
 
 void LoRa ::disableTransmit_handler(FwIndexType portNum) {
-    this->setTransmitEnable(TransmitEnable::DISABLED);
+    this->setTransmitState(TransmitState::DISABLING);
 }
 
 void LoRa ::receive(U8* data, U16 size, I16 rssi, I8 snr) {
@@ -204,32 +198,6 @@ void LoRa ::CONTINUOUS_WAVE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, U16 seco
                           (status == Status::SUCCESS) ? Fw::CmdResponse::OK : Fw::CmdResponse::EXECUTION_ERROR);
 }
 
-// ----------------------------------------------------------------------
-// Parameter and transmit-state helpers
-// ----------------------------------------------------------------------
-
-void LoRa ::parameterUpdated(FwPrmIdType id) {
-    switch (id) {
-        case PARAMID_TRANSMIT_ENABLE: {
-            Fw::ParamValid valid = Fw::ParamValid::INVALID;
-            const TransmitEnable enable = this->paramGet_TRANSMIT_ENABLE(valid);
-            FW_ASSERT((valid == Fw::ParamValid::VALID) || (valid == Fw::ParamValid::DEFAULT),
-                      static_cast<FwAssertArgType>(valid));
-            this->setTransmitState(enable == TransmitEnable::ENABLED ? TransmitState::ENABLED
-                                                                     : TransmitState::DISABLED);
-            break;
-        }
-        default:
-            // Other parameters are read when configuring TX/RX; no immediate action needed
-            break;
-    }
-}
-
-void LoRa ::setTransmitEnable(TransmitEnable enable) {
-    this->paramSet_TRANSMIT_ENABLE(enable, Fw::ParamValid::VALID);
-    this->setTransmitState(enable == TransmitEnable::ENABLED ? TransmitState::ENABLED : TransmitState::DISABLED);
-}
-
 void LoRa ::setTransmitState(TransmitState state) {
     Os::ScopeLock lock(this->m_mutex);
     // Want to enable
@@ -250,5 +218,10 @@ void LoRa ::setTransmitState(TransmitState state) {
             this->m_transmit_enabled = TransmitState::DISABLING;
         }
     }
+}
+
+void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, TransmitState enabled) {
+    this->setTransmitState(enabled);
+    this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
 }  // namespace Zephyr

@@ -30,12 +30,6 @@ module Zephyr {
         DISABLING,
     }
 
-    @ Desired transmit enable (saved as a parameter; excludes transient DISABLING)
-    enum TransmitEnable : U8 {
-        DISABLED
-        ENABLED
-    }
-
     @ Wrapper for the Zephyr LoRa driver
     passive component LoRa {
         @ Import the communication interface
@@ -56,11 +50,11 @@ module Zephyr {
         @ Bandwidth for reception
         param BANDWIDTH_RX: LoRaBandwidth default LoRaBandwidth.BW_125_KHZ
 
-        @ Enable/disable LoRa transmission (com-status ping-pong)
-        param TRANSMIT_ENABLE: TransmitEnable default TransmitEnable.DISABLED
-
         @ Continuous wave transmission
         sync command CONTINUOUS_WAVE(seconds: U16)
+
+        @ Start/stop transmission on the LoRa module
+        sync command TRANSMIT(enabled: TransmitState)
 
         @ Event to indicate configuration failure
         event ConfigurationFailed(mode: LoRaMode) severity warning high \
