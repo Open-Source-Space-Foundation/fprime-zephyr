@@ -159,6 +159,14 @@ void LoRa ::dataReturnIn_handler(FwIndexType portNum, Fw::Buffer& data, const Co
     this->deallocate_out(0, data);
 }
 
+void LoRa ::enableTransmit_handler(FwIndexType portNum) {
+    this->setTransmitState(TransmitState::ENABLED);
+}
+
+void LoRa ::disableTransmit_handler(FwIndexType portNum) {
+    this->setTransmitState(TransmitState::DISABLING);
+}
+
 void LoRa ::receive(U8* data, U16 size, I16 rssi, I8 snr) {
     FW_ASSERT(data != nullptr);
     const FwSizeType payload_size = static_cast<FwSizeType>(size - sizeof(LoRaConfig::HEADER));
@@ -190,27 +198,30 @@ void LoRa ::CONTINUOUS_WAVE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, U16 seco
                           (status == Status::SUCCESS) ? Fw::CmdResponse::OK : Fw::CmdResponse::EXECUTION_ERROR);
 }
 
-void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, TransmitState enabled) {
+void LoRa ::setTransmitState(TransmitState state) {
     Os::ScopeLock lock(this->m_mutex);
     // Want to enable
-    if (enabled == TransmitState::ENABLED) {
+    if (state == TransmitState::ENABLED) {
         // Start the ping-pong protocol if we are disabled
-        if (this->m_transmit_enabled == TransmitState::DISABLED) {
-            // Must transition to ENABLED **BEFORE** calling comStatusOut
-            this->m_transmit_enabled = TransmitState::ENABLED;
+        const bool was_disabled = (this->m_transmit_enabled == TransmitState::DISABLED);
+        // Must transition to ENABLED **BEFORE** calling comStatusOut
+        this->m_transmit_enabled = TransmitState::ENABLED;
+        if (was_disabled) {
             Fw::Success comStatus = Fw::Success::SUCCESS;
             this->comStatusOut_out(0, comStatus);
         }
-        // Set ENABLED for all other cases
-        this->m_transmit_enabled = TransmitState::ENABLED;
     }
     // Want to disable
     else {
-        // If not already diabled, then the ping-pong protocol should be stopped and thus we go to DISABLING state
+        // If not already disabled, then the ping-pong protocol should be stopped and thus we go to DISABLING state
         if (this->m_transmit_enabled != TransmitState::DISABLED) {
             this->m_transmit_enabled = TransmitState::DISABLING;
         }
     }
+}
+
+void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, TransmitState enabled) {
+    this->setTransmitState(enabled);
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
 }  // namespace Zephyr
