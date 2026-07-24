@@ -89,7 +89,7 @@ module Zephyr {
         telemetry ModuleBandwidth: Zephyr.LoRaBandwidth
 
         @ Radio transmit state rate telemetry
-        telemetry ModuleTransmitState: Zephyr.LoRaTransmitState
+        telemetry ModuleTransmitState: Zephyr.TransmitState
 
         ###############################################################################
         # Standard AC Ports: Required for Channels, Events, Commands, and Parameters  #
