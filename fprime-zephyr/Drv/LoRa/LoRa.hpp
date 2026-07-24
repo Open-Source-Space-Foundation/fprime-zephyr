@@ -106,6 +106,7 @@ class LoRa final : public LoRaComponentBase {
     const struct device* m_lora_device;
     Zephyr::TransmitState m_transmit_enabled;  //!< Transmit enabled state
     Os::Mutex m_mutex;  //!< Mutex for thread safety
+    bool m_lora_ever_on = false;  //!< Latched true after transmit is first enabled
 
     FwSizeType m_bytes_sent = 0;     //!< Total bytes sent telemetry
     FwSizeType m_bytes_received = 0; //!< Total bytes received telemetry
