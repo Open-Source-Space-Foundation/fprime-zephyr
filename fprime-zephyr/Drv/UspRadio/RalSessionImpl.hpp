@@ -47,6 +47,10 @@ class RalSessionImpl final : public RalSession {
     void setCallbacks(RxDoneCallback rxDone) override;
 
   private:
+    //! Force the transceiver to STDBY_XOSC with IRQs cleared (chip-level
+    //! "radio stopped" postcondition; see the .cpp comment for the
+    //! anomaly-B rationale).
+    void quiesceRadio();
     // ------------------------------------------------------------------
     // RAC transaction context (pre-tx callback payload, stored in instance)
     // ------------------------------------------------------------------

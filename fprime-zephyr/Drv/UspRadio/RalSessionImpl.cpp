@@ -543,7 +543,27 @@ int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
     // Block the component thread until TX_DONE IRQ (signalled via semaphore
     // in onPostTx).  Timeout: conservatively 10 s (longest LoRa symbol airtime).
     int ret = k_sem_take(&m_txDoneSem, K_SECONDS(10));
-    return (ret == 0) ? m_txScratch.result : -ETIMEDOUT;
+    if (ret != 0) {
+        // TX_DONE never arrived (chip hung in TX — see quiesceRadio()).  The
+        // LOCK task is still RUNNING; without recovery it stays RUNNING
+        // forever and every subsequent smtc_rac_lock_radio_access on this
+        // hook fails (ALREADY_RUNNING) — the permanent TX-dead latch of
+        // HWIL anomaly B.  Abort the stuck task, wait for the engine to
+        // free it, then force the chip back to standby.
+        (void)smtc_rac_unlock_radio_access(m_radio_id);
+        radio_planner_t* rp = smtc_rac_get_rp();
+        int32_t waited_ms = 0;
+        while ((rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) &&
+               (waited_ms < ENQUEUE_READY_DEADLINE_MS)) {
+            k_sleep(K_MSEC(1));
+            ++waited_ms;
+        }
+        this->quiesceRadio();
+        Fw::Logger::log("[UspRadio] transmitPacket: TX_DONE timeout - task aborted, radio quiesced (hook state=%d)\n",
+                        static_cast<int>(rp->tasks[m_radio_id].state));
+        return -ETIMEDOUT;
+    }
+    return m_txScratch.result;
 }
 
 // ---------------------------------------------------------------------------
@@ -619,6 +639,39 @@ namespace {
 constexpr int32_t STOP_DEADLINE_MS = 1000;  //!< generous bound on USP-thread abort processing
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// quiesceRadio() — enforce the "radio stopped" postcondition at chip level.
+//
+// The radio planner's abort/unlock processing frees the RP task WITHOUT
+// bringing the transceiver out of an active mode: the legacy engine path
+// issues SetSleep directly from a running RX, and the lazy-sleep path leaves
+// the chip running in RX outright.  Commanding an SX126x out of an ACTIVE
+// GFSK continuous RX with anything but SetStandby first is out of spec, and
+// HWIL capture 2026-07-24 (anomaly B) shows the failure mode: the first
+// SetTx after a profile switch — issued while the chip was still in GFSK RX
+// (GetStatus chip_mode=RX immediately before SetTx) — hangs the chip in TX
+// forever (chip_mode=TX at +1 s, IRQ status 0, device error XOSC_START_ERR,
+// TX_DONE never fires).  LoRa RX tolerates the same sequence, which is why
+// P0 never wedged while P4/P5 (GFSK/GMSK) did.
+//
+// Fix: stopRadio() guarantees the chip is in STDBY_XOSC with IRQs cleared
+// before returning, so every follow-on config/SetTx/SetRx starts from
+// standby, per datasheet.  STDBY_XOSC (not RC) keeps the TCXO running so
+// the saturation path pays no oscillator restart.  Cost: two short SPI
+// commands per stop (~0.1 ms at 4 MHz) — noise against the 27+ ms frame
+// airtime.
+//
+// Concurrency: called with the hook FINISHED and the engine idle for this
+// hook.  A concurrent lazy-sleep expiry on the USP thread could interleave
+// its SetSleep with this SetStandby; both orders leave the chip in a state
+// the next task launch handles (wake from sleep, or standby), and the SPI
+// bus itself is serialized by the Zephyr driver.
+// ---------------------------------------------------------------------------
+void RalSessionImpl::quiesceRadio() {
+    (void)ral_set_standby(m_ral, RAL_STANDBY_CFG_XOSC);
+    (void)ral_clear_irq_status(m_ral, RAL_IRQ_ALL);
+}
+
 int RalSessionImpl::stopRadio() {
     // Drain any stale semaphore count from a previous un-awaited stop.
     (void)k_sem_take(&m_stopDoneSem, K_NO_WAIT);
@@ -643,6 +696,7 @@ int RalSessionImpl::stopRadio() {
     // FINISHED synchronously, so FINISHED here still means "was idle".)
     radio_planner_t* rp = smtc_rac_get_rp();
     if (rp->tasks[m_radio_id].state == RP_TASK_STATE_FINISHED) {
+        this->quiesceRadio();
         return 0;
     }
 
@@ -656,9 +710,11 @@ int RalSessionImpl::stopRadio() {
     // task-finished-between-snapshot-and-abort case (by then any callback
     // has long since run).
     if (k_sem_take(&m_stopDoneSem, K_MSEC(STOP_DEADLINE_MS)) == 0) {
+        this->quiesceRadio();
         return 0;
     }
     if (rp->tasks[m_radio_id].state == RP_TASK_STATE_FINISHED) {
+        this->quiesceRadio();
         return 0;
     }
 
