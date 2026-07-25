@@ -94,8 +94,8 @@ struct LinkProfile {
 // ---------------------------------------------------------------------------
 // Table version and size constants
 // ---------------------------------------------------------------------------
-constexpr U8 LINK_PROFILE_TABLE_VERSION = 1;
-constexpr U8 LINK_PROFILE_COUNT         = 5;
+constexpr U8 LINK_PROFILE_TABLE_VERSION = 2;
+constexpr U8 LINK_PROFILE_COUNT         = 6;
 constexpr U8 BOOT_DEFAULT_PROFILE       = 0;  //!< Index of boot-default (P0)
 
 // ---------------------------------------------------------------------------
@@ -207,6 +207,30 @@ constexpr LinkProfile LINK_PROFILE_TABLE[LINK_PROFILE_COUNT] = {
             .whitening        = true,
         },
     },
+    // ------------------------------------------------------------------
+    // P5: GMSK 83333 bps — max-rate GMSK candidate (GFSK h=0.5, BT=0.5)
+    // h = 2*fdev/br = 2*20833/83333 = 0.49999 (GMSK)
+    // OBW_carson = 83333 + 2*20833 = 124999 Hz  (< 125000 ✓, at limit)
+    // OBW_bt05   = 1.5 * 83333    = 125000 Hz  (== limit)
+    // RX BW: SX126x GFSK DSB steps are 117.3k / 156.2k; 117.3k < OBW, so
+    // 156.2k DSB is the minimum legal choice → CFO margin ≈ ±15.6 kHz
+    // ((156200-124999)/2) before signal energy leaves the filter.
+    // Sync word 0xB27DB27D: distinct from P3/P4, balanced Hamming weight.
+    // ------------------------------------------------------------------
+    {
+        .mod  = ModKind::GFSK,
+        .gfsk = {
+            .bitrate_bps      = 83333,
+            .fdev_hz          = 20833,
+            .bw_dsb_hz        = 156200,
+            .pulse_shape      = GfskPulseShape::BT_05,
+            .preamble_len_bits = 32,
+            .sync_word        = {0xB2, 0x7D, 0xB2, 0x7D},
+            .sync_word_len    = 4,
+            .crc_type         = GfskCrcType::BYTE_2,
+            .whitening        = true,
+        },
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -241,6 +265,10 @@ static_assert(
 static_assert(
     LINK_PROFILE_TABLE[4].gfsk.bitrate_bps + 2 * LINK_PROFILE_TABLE[4].gfsk.fdev_hz <= 125000,
     "P4 GFSK OBW_carson exceeds 125 kHz IARU limit");
+//    P5: 83333 + 2*20833 = 124999
+static_assert(
+    LINK_PROFILE_TABLE[5].gfsk.bitrate_bps + 2 * LINK_PROFILE_TABLE[5].gfsk.fdev_hz <= 125000,
+    "P5 GMSK OBW_carson exceeds 125 kHz IARU limit");
 
 // 6. Table version must be non-zero.
 static_assert(LINK_PROFILE_TABLE_VERSION > 0, "Table version must be >= 1");
