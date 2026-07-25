@@ -86,6 +86,9 @@ module Zephyr {
         @ Disable LoRa transmission
         sync input port disableTransmit: Fw.Signal
 
+        @ Emitted once when LoRa transmit is first enabled
+        output port loraFirstStart: Fw.Signal
+
         ###############################################################################
         # Standard AC Ports: Required for Channels, Events, Commands, and Parameters  #
         ###############################################################################

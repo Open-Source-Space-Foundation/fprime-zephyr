@@ -58,6 +58,13 @@ LoRa::Status LoRa ::start(const struct device* lora_device, const TransmitState&
     if (transmit_enabled == TransmitState::ENABLED) {
         Fw::Success status = Fw::Success::SUCCESS;
         this->comStatusOut_out(0, status);
+
+        if (!this->m_lora_ever_on) {
+            this->m_lora_ever_on = true;
+            if (this->isConnected_loraFirstStart_OutputPort(0)) {
+                this->loraFirstStart_out(0);
+            }
+        }
     }
 
     return Status::SUCCESS;
@@ -237,6 +244,12 @@ void LoRa ::setTransmitState(TransmitState state) {
         if (was_disabled) {
             Fw::Success comStatus = Fw::Success::SUCCESS;
             this->comStatusOut_out(0, comStatus);
+        }
+        if (!this->m_lora_ever_on) {
+            this->m_lora_ever_on = true;
+            if (this->isConnected_loraFirstStart_OutputPort(0)) {
+                this->loraFirstStart_out(0);
+            }
         }
     }
     // Want to disable
