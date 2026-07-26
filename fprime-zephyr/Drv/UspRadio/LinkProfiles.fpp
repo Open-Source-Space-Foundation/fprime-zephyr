@@ -25,6 +25,8 @@ module Zephyr {
         P3_GFSK_38K  = 3
         @ GFSK 75000 bps, fdev 25 kHz, BT=0.5 — max-rate bulk downlink (OBW 112.5 kHz)
         P4_GFSK_75K  = 4
+        @ GMSK 83333 bps, fdev 20.833 kHz (h=0.5), BT=0.5 — max-rate GMSK candidate (OBW 125 kHz)
+        P5_GMSK_83K  = 5
     }
 
     @ Modulation kind tag — mirrors ModKind in LinkProfiles.hpp
