@@ -26,11 +26,12 @@ using namespace Zephyr;
 // ---------------------------------------------------------------------------
 
 TEST(LinkProfiles, CountMatchesMacro) {
-    EXPECT_EQ(static_cast<int>(LINK_PROFILE_COUNT), 5);
+    EXPECT_EQ(static_cast<int>(LINK_PROFILE_COUNT), 6);
 }
 
-TEST(LinkProfiles, VersionIsOne) {
-    EXPECT_EQ(static_cast<int>(LINK_PROFILE_TABLE_VERSION), 1);
+TEST(LinkProfiles, VersionIsTwo) {
+    // v2 added P5 (GMSK 83333 bps)
+    EXPECT_EQ(static_cast<int>(LINK_PROFILE_TABLE_VERSION), 2);
 }
 
 TEST(LinkProfiles, BootDefaultIsZero) {
@@ -174,13 +175,66 @@ TEST(LinkProfiles, P4_SyncWord_D391D391) {
     EXPECT_EQ(g.sync_word_len, 4u);
 }
 
+// ---------------------------------------------------------------------------
+// P5 GMSK (max-rate GMSK candidate: h=0.5, BT=0.5)
+// ---------------------------------------------------------------------------
+
+TEST(LinkProfiles, P5_Bitrate83333) {
+    EXPECT_EQ(LINK_PROFILE_TABLE[5].gfsk.bitrate_bps, 83333u);
+}
+
+TEST(LinkProfiles, P5_Fdev20833) {
+    EXPECT_EQ(LINK_PROFILE_TABLE[5].gfsk.fdev_hz, 20833u);
+}
+
+TEST(LinkProfiles, P5_ModIndexIsGmsk) {
+    // h = 2*fdev/br must be 0.5 within integer-rounding tolerance (GMSK)
+    const auto& g = LINK_PROFILE_TABLE[5].gfsk;
+    const uint32_t twice_fdev = 2u * g.fdev_hz;   // 41666
+    // |2*fdev - 0.5*br| <= 1 Hz of rounding: 0.5*83333 = 41666.5
+    EXPECT_LE(twice_fdev, (g.bitrate_bps + 1u) / 2u + 1u);
+    EXPECT_GE(twice_fdev, g.bitrate_bps / 2u - 1u);
+}
+
+TEST(LinkProfiles, P5_PulseShapeBT05) {
+    EXPECT_EQ(LINK_PROFILE_TABLE[5].gfsk.pulse_shape, GfskPulseShape::BT_05);
+}
+
+TEST(LinkProfiles, P5_OBW_Carson_OneHzUnderLimit) {
+    const auto& g = LINK_PROFILE_TABLE[5].gfsk;
+    // 83333 + 2*20833 = 124999 — one hertz under the IARU limit
+    EXPECT_EQ(g.bitrate_bps + 2u * g.fdev_hz, 124999u);
+}
+
+TEST(LinkProfiles, P5_RxBwMinimumLegal156k) {
+    // SX126x GFSK DSB steps are 117.3k / 156.2k; 117.3k < OBW, so 156.2k
+    // is the minimum legal RX bandwidth for this profile.
+    EXPECT_EQ(LINK_PROFILE_TABLE[5].gfsk.bw_dsb_hz, 156200u);
+}
+
+TEST(LinkProfiles, P5_SyncWord_B27DB27D) {
+    const auto& g = LINK_PROFILE_TABLE[5].gfsk;
+    EXPECT_EQ(g.sync_word[0], 0xB2u);
+    EXPECT_EQ(g.sync_word[1], 0x7Du);
+    EXPECT_EQ(g.sync_word[2], 0xB2u);
+    EXPECT_EQ(g.sync_word[3], 0x7Du);
+    EXPECT_EQ(g.sync_word_len, 4u);
+}
+
 TEST(LinkProfiles, GfskProfilesDistinctSyncWords) {
-    // P3 and P4 sync words must differ to avoid cross-detection
-    const auto& p3 = LINK_PROFILE_TABLE[3].gfsk;
-    const auto& p4 = LINK_PROFILE_TABLE[4].gfsk;
-    bool same = true;
-    for (int b = 0; b < 4; ++b) {
-        if (p3.sync_word[b] != p4.sync_word[b]) { same = false; break; }
+    // All GFSK sync words must differ pairwise to avoid cross-detection
+    for (int i = 0; i < LINK_PROFILE_COUNT; ++i) {
+        if (LINK_PROFILE_TABLE[i].mod != ModKind::GFSK) continue;
+        for (int j = i + 1; j < LINK_PROFILE_COUNT; ++j) {
+            if (LINK_PROFILE_TABLE[j].mod != ModKind::GFSK) continue;
+            const auto& a = LINK_PROFILE_TABLE[i].gfsk;
+            const auto& b = LINK_PROFILE_TABLE[j].gfsk;
+            bool same = true;
+            for (int k = 0; k < 4; ++k) {
+                if (a.sync_word[k] != b.sync_word[k]) { same = false; break; }
+            }
+            EXPECT_FALSE(same) << "GFSK sync words for profiles " << i
+                               << " and " << j << " must be distinct";
+        }
     }
-    EXPECT_FALSE(same) << "P3 and P4 GFSK sync words must be distinct";
 }
