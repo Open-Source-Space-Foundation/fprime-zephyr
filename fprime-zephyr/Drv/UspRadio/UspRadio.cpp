@@ -29,6 +29,14 @@
 
 namespace Zephyr {
 
+#ifdef __ZEPHYR__
+// Wake-up hint for the post-TX re-arm-skip window: dataIn gives, the deferred
+// TX handler waits on it instead of polling k_sleep(1ms) x5.  The semaphore is
+// only a WAKE HINT — m_pendingTxFrames remains the sole truth for the
+// skip/re-arm decision (see deferredTxPacket handler).
+K_SEM_DEFINE(usp_txpend_sem, 0, 1);
+#endif
+
 // ---------------------------------------------------------------------------
 // Construction
 // ---------------------------------------------------------------------------
@@ -191,6 +199,12 @@ void UspRadio::dataIn_handler(FwIndexType /*portNum*/,
     // Count before enqueue: deferredTxPacket sees >0 while more frames are
     // in flight and skips the per-frame RX re-arm (see m_pendingTxFrames).
     m_pendingTxFrames.fetch_add(1, std::memory_order_relaxed);
+#ifdef __ZEPHYR__
+    // Wake the component thread if it is parked in the re-arm-skip window.
+    // Ordering: the fetch_add above happens-before this give, so a waiter
+    // woken by it always observes m_pendingTxFrames > 0.
+    k_sem_give(&usp_txpend_sem);
+#endif
     this->deferredTxPacket_internalInterfaceInvoke(data, context);
 }
 
@@ -360,8 +374,20 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         // safe: the episode's final frame exhausts the window and re-arms,
         // and the DISABLING/DISABLED seams re-arm unconditionally.
 #ifdef __ZEPHYR__
-        for (int i = 0; (i < 5) && (m_pendingTxFrames.load(std::memory_order_relaxed) == 0); i++) {
-            k_sleep(K_MSEC(1));
+        // Semaphore-signalled wait (replaces the 5x1 ms k_sleep poll, which
+        // kept sleeping past the moment dataIn arrived).  Discipline:
+        //   1. reset: drop any stale credit from a frame already consumed
+        //      (a stale credit must never fake "frame pending" — deafness).
+        //   2. if no frame is pending, block until dataIn's give or the
+        //      bounded 5 ms fail-safe timeout (== the old total window).
+        //   3. the skip/re-arm decision below still reads m_pendingTxFrames
+        //      only — the sem is purely a wake hint, so semantics when the
+        //      condition is already set, and on timeout, match the old poll.
+        // A give landing after the reset always belongs to a dataIn whose
+        // pending-count increment is visible at the check below.
+        k_sem_reset(&usp_txpend_sem);
+        if (m_pendingTxFrames.load(std::memory_order_relaxed) == 0) {
+            (void) k_sem_take(&usp_txpend_sem, K_MSEC(5));
         }
 #endif
         if (m_pendingTxFrames.load(std::memory_order_relaxed) == 0) {
