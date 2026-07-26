@@ -331,7 +331,16 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         int rc = m_session->transmitPacket(txData, txSize);
         if (rc != 0) {
             this->log_WARNING_HI_SendFailed(static_cast<I32>(rc));
-            returnStatus = Fw::Success::FAILURE;
+            // Report SUCCESS ("ready for the next frame") even though this
+            // frame was dropped: Svc::ComQueue holds the queue in WAITING
+            // until a SUCCESS comStatus arrives, and after a failed send no
+            // later event ever emits one — a single failure permanently
+            // parked the downlink (HWIL anomaly B, 2026-07-24: one TX_DONE
+            // timeout froze BytesSent for the rest of the run while the
+            // radio itself had already been recovered).  The link layer is
+            // lossy by design; SendFailed remains the operator-visible
+            // signal for the dropped frame.
+            returnStatus = Fw::Success::SUCCESS;
         } else {
             // Payload bytes only (header excluded) — keeps BytesSent/BytesReceived
             // parity checks meaningful across compat and raw peers.
