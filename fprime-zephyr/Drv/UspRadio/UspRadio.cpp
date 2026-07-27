@@ -19,6 +19,7 @@
 #include "fprime-zephyr/Drv/UspRadio/UspRadio.hpp"
 #include "fprime-zephyr/Drv/UspRadio/LinkProfiles.hpp"
 #include "fprime-zephyr/Drv/UspRadio/RadioHeadShim.hpp"
+#include "fprime-zephyr/Drv/UspRadio/TxOutcomePolicy.hpp"
 
 #include <Fw/Logger/Logger.hpp>
 #include <cstring>
@@ -315,27 +316,30 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         }
 
         int rc = m_session->transmitPacket(txData, txSize);
-        if (rc != 0) {
+        // Decision extracted to TxOutcomePolicy::evaluate() (host-testable,
+        // see its file header for the anomaly-B rationale) — same branches,
+        // same outcomes as before the extraction, no behavior change.
+        const TxOutcomePolicy::Outcome outcome = TxOutcomePolicy::evaluate(rc);
+        if (outcome.logSendFailed) {
             this->log_WARNING_HI_SendFailed(static_cast<I32>(rc));
-            // Report SUCCESS ("ready for the next frame") even though this
-            // frame was dropped: Svc::ComQueue holds the queue in WAITING
-            // until a SUCCESS comStatus arrives, and after a failed send no
-            // later event ever emits one — a single failure permanently
-            // parked the downlink (HWIL anomaly B, 2026-07-24: one TX_DONE
-            // timeout froze BytesSent for the rest of the run while the
-            // radio itself had already been recovered).  The link layer is
-            // lossy by design; SendFailed remains the operator-visible
-            // signal for the dropped frame.
-            returnStatus = Fw::Success::SUCCESS;
-        } else {
+        }
+        if (outcome.transmitted) {
             // Payload bytes only (header excluded) — keeps BytesSent/BytesReceived
             // parity checks meaningful across compat and raw peers.
             m_bytesSent += size;
             this->tlmWrite_BytesSent(m_bytesSent);
-            returnStatus = Fw::Success::SUCCESS;
+        }
+        if (outcome.clearThrottles) {
             this->log_WARNING_HI_ConfigurationFailed_ThrottleClear();
             this->log_WARNING_HI_SendFailed_ThrottleClear();
         }
+        // ALWAYS SUCCESS, transmitted or not — see TxOutcomePolicy.hpp.
+        // Svc::ComQueue parks in WAITING forever on a FAILURE comStatus with
+        // no later SUCCESS event; that permanent-drop latch was HWIL
+        // anomaly B (2026-07-24).  SendFailed above remains the
+        // operator-visible signal for the dropped frame.
+        returnStatus =
+            (outcome.comStatus == TxOutcomePolicy::ComStatus::SUCCESS) ? Fw::Success::SUCCESS : Fw::Success::FAILURE;
 
         // Re-arm continuous RX after TX — deferred to the tail of this
         // handler, AFTER comStatusOut releases the com pipeline.  The com
