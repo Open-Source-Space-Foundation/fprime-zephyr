@@ -1,37 +1,9 @@
 // ======================================================================
 // \title  LinkProfiles.hpp
-// \brief  Versioned, append-only Link Profile table (Phase 2, ADR 0002)
-//
-// This header is intentionally free of USP/RAL and Zephyr includes so
-// it compiles host-side (for unit tests and GRC) as well as on-target.
-//
-// Occupied-bandwidth methodology for GFSK profiles
-// -------------------------------------------------
-// We use the Carson-rule approximation:
-//   OBW_carson ≈ 2·(fdev + bitrate/2) = bitrate + 2·fdev
-// and additionally verify via the 1.5×bitrate rule-of-thumb (which holds
-// for BT=0.5 Gaussian filtering per ETSI EN 300 220):
-//   OBW_bt05  ≈ 1.5 × bitrate
-// The binding constraint used in the static_asserts is the MORE
-// CONSERVATIVE of the two (Carson rule), since it makes fewer assumptions
-// about the spectral roll-off achieved in practice.
-//
-// Band constraint: IARU coordination limits us to ≤125 kHz OBW on the
-// UHF allocation.  All profiles must satisfy this (ADR 0002, plan Goal).
-//
-// SF5/SF6 note: these are SX126x-only spreading factors, not interoperable
-// with any SX127x asset.  Documented here; fine — profiles are per board
-// generation.
-//
-// Sync word notes
-// ---------------
-// P0 LoRa sync word 0x12: private-network (1-byte convention).  GRC uses 0x12.
-// expected by the Zephyr loramac-node driver (lora_modem_config.public_network
-// = false → LoRa chip register 0x0740 = 0x14, 0x0741 = 0x24 on SX126x).
-// P3 GFSK sync word 0xC9C9C9C9: 4-byte word, chosen for high autocorrelation
-// and good chip-level balance (alternating-run structure, Hamming weight 16/32).
-// P4 GFSK sync word 0xD391D391: 4-byte word with similar properties, distinct
-// from P3 to avoid cross-detection.
+// \brief  Versioned, append-only Link Profile table.  Free of USP/RAL and
+//         Zephyr includes so it compiles host-side as well as on-target.
+//         GFSK OBW methodology (Carson rule vs 1.5x bitrate) and the
+//         ≤125 kHz IARU band constraint: see ADR 0002.
 // ======================================================================
 
 #ifndef ZEPHYR_USP_RADIO_LINK_PROFILES_HPP

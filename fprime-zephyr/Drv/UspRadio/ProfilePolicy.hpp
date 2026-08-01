@@ -1,32 +1,10 @@
 // ======================================================================
 // \title  ProfilePolicy.hpp
 // \brief  Profile-selection state machine (host-compilable, no F´/USP deps).
-//
-// This class holds the current TX/RX profile indices, the pending-RX-change
-// plus revert deadline, and the auto-revert counter.  It is intentionally
-// free of F´ framework and USP/Zephyr headers so it compiles for host-side
-// unit tests without any special guards.
-//
-// Caller (UspRadio component thread) supplies millisecond timestamps via
-// the nowMs argument so the class never reads a clock directly — making
-// it straightforwardly testable.
-//
-// State machine summary (ADR 0002):
-//   - Boot: tx = rx = BOOT_DEFAULT_PROFILE (P0)
-//   - SET_TX_PROFILE(idx):
-//       * if invalid → kInvalidIndex action
-//       * else       → kApplyTx action, update m_txProfile
-//   - SET_RX_PROFILE(idx, revert_s):
-//       * if invalid → kInvalidIndex action
-//       * if idx == current rx → kNoOp
-//       * else       → kApplyRx action, arm revert deadline, store m_pendingRxProfile
-//   - frameReceived() while pending:
-//       * if received on pending profile → kConfirmRx action (cancels timer)
-//       * (received on any profile confirms the pending RX profile since the
-//          component cannot distinguish which profile decoded it — if a frame
-//          arrived within the window, the profile works)
-//   - tick(nowMs):
-//       * if revert deadline passed → kRevert action, increment revert counter
+//         Holds TX/RX profile indices, pending RX change + revert deadline,
+//         and the auto-revert counter (ADR 0002).  Callers supply timestamps
+//         via nowMs so the class never reads a clock — testable host-side.
+//         Any frame received while pending confirms the pending RX profile.
 // ======================================================================
 
 #ifndef ZEPHYR_USP_RADIO_PROFILE_POLICY_HPP

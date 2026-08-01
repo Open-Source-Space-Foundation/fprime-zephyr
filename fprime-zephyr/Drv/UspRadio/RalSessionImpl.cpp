@@ -44,16 +44,15 @@ extern "C" {
 #include <ral_defs.h>
 }
 
-// smtc_modem_hal_get_time_in_ms is implemented in the usp_zephyr module as
-// k_uptime_get_32().  Its header is not on the public include path, so we
-// either forward-declare it or use k_uptime_get_32() directly.  Using
-// k_uptime_get_32() is simpler and avoids a private-header dependency.
-//
-// The RAC scheduler_config.start_time_ms comment says:
-//   "set smtc_modem_hal_get_time_in_ms() if you want NOW"
-// k_uptime_get_32() is precisely that — same implementation.
+// k_uptime_get_32() == smtc_modem_hal_get_time_in_ms() (same implementation);
+// used directly for scheduler start_time_ms to avoid a private-header dependency.
 
 namespace Zephyr {
+
+namespace {
+//! Max on-air packet size read into the onPostRx local buffer.
+constexpr std::size_t MAX_RX_BUF = 255;
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // Singleton pointer — set in init(), read by static trampolines
@@ -72,10 +71,7 @@ RalSessionImpl::RalSessionImpl(uint32_t freq_hz, int8_t tx_power_dbm)
       m_ral(nullptr),
       m_ralf(nullptr),
       m_initialized(false),
-      m_pktType(RAL_PKT_TYPE_LORA),
-      m_rxLen(0),
-      m_rxRssi(0),
-      m_rxSnr(0) {
+      m_pktType(RAL_PKT_TYPE_LORA) {
     m_txScratch = {};
     m_applyScratch = {};
     m_loraPktParams = {};
@@ -90,9 +86,8 @@ RalSessionImpl::RalSessionImpl(uint32_t freq_hz, int8_t tx_power_dbm)
 // Callback registration
 // ---------------------------------------------------------------------------
 
-void RalSessionImpl::setCallbacks(RxDoneCallback rxDone, TxDoneCallback txDone) {
+void RalSessionImpl::setCallbacks(RxDoneCallback rxDone) {
     m_rxDone = rxDone;
-    m_txDone = txDone;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,8 +146,7 @@ bool RalSessionImpl::applyLoRa_or_Gfsk(const LinkProfile& p) {
 }
 
 void RalSessionImpl::onPreApply(void) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
 
     if (self->applyLoRa_or_Gfsk(*self->m_applyScratch.profile)) {
         self->m_applyScratch.result = 0;
@@ -171,8 +165,7 @@ void RalSessionImpl::onPostApply(rp_status_t /*status*/) {
     // Fires on the USP thread after the radio planner has fully processed the
     // unlock (task state → FINISHED).  Signal applyProfile() that the result
     // is ready AND the hook_id is available for the next enqueue.
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
     k_sem_give(&self->m_applyDoneSem);
 }
 
@@ -303,8 +296,7 @@ int RalSessionImpl::applyGfsk(const GfskParams& p) {
 // ---------------------------------------------------------------------------
 
 void RalSessionImpl::onPreRx(void) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
 
     // PRE callback fires once when the LOCK task is first launched (ASAP → running).
     // Set up IRQ mask and start continuous RX.  Packet reading happens in
@@ -328,8 +320,7 @@ void RalSessionImpl::onPreRx(void) {
 }
 
 void RalSessionImpl::onPostRx(rp_status_t status) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
 
     // POST callback fires on two paths:
     //   (A) DIO1 fires while LOCK task is RUNNING → RP_STATUS_RADIO_LOCKED.
@@ -437,20 +428,16 @@ int RalSessionImpl::startReceive() {
 // ---------------------------------------------------------------------------
 
 void RalSessionImpl::onPreTx(void) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
 
     // PRE callback fires once when the LOCK task is first launched.
     // Set up payload, configure TX_DONE IRQ, and start the transmitter.
     // TX_DONE handling happens in onPostTx(RP_STATUS_RADIO_LOCKED).
 
-    // Program the TRUE payload length.  ral_set_pkt_payload only writes the
-    // radio FIFO; the SX126x takes its transmit length (and the LoRa
-    // explicit-header / GFSK length-byte value) from SetPacketParams, which
-    // applyProfile left at the 0xFF placeholder — without this every frame
-    // radiates 255 B (payload + stale FIFO tail) and the receiver counts and
-    // delivers padded frames (HWIL 2026-07-11: 252+3 B burst → GRC BytesSent
-    // 255 vs flight BytesReceived 504 = 2×252-clamped).
+    // Program the TRUE payload length via SetPacketParams: ral_set_pkt_payload
+    // only writes the FIFO, and applyProfile left pld_len at the 0xFF
+    // placeholder — without this every frame radiates 255 B (payload + stale
+    // FIFO tail).
     ral_status_t lenStatus;
     if (self->m_pktType == RAL_PKT_TYPE_GFSK) {
         ral_gfsk_pkt_params_t pkt = self->m_gfskPktParams;
@@ -487,8 +474,7 @@ void RalSessionImpl::onPreTx(void) {
 }
 
 void RalSessionImpl::onPostTx(rp_status_t status) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
 
     // POST callback fires on three paths:
     //   (A) DIO1 fires with TX_DONE while LOCK task RUNNING → RP_STATUS_RADIO_LOCKED.
@@ -508,7 +494,6 @@ void RalSessionImpl::onPostTx(rp_status_t status) {
         ral_get_and_clear_irq_status(self->m_ral, &irq);
         if (irq & RAL_IRQ_TX_DONE) {
             ral_handle_tx_done(self->m_ral);
-            if (self->m_txDone) self->m_txDone();
         }
         self->m_txScratch.result = 0;
         // Unlock → rp_callback processes UNLOCK_RADIO_ACCESS → rp_task_free →
@@ -537,16 +522,9 @@ void RalSessionImpl::onPostTx(rp_status_t status) {
 
 int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
     // Drain any stale semaphore count from a previous un-awaited completion
-    // (same discipline as stopRadio()).  onPostTx gives m_txDoneSem on
-    // RADIO_UNLOCKED, TASK_ABORTED, and unexpected statuses; a give with no
-    // pending take (e.g. a straggler after the 10 s timeout, or an abort of an
-    // in-flight TX whose waiter already returned) leaves a count of 1.  Without
-    // this drain, the next transmitPacket() consumes the stale count instantly
-    // and returns "success" while its own TX is still in flight — the caller's
-    // startReceive() then hits the still-RUNNING hook (ALREADY_RUNNING → -EIO)
-    // and, because each real TX_DONE re-seeds the stale count, the failure
-    // repeats on EVERY subsequent frame (HWIL: ConfigurationFailed:RX at exact
-    // TX frame cadence while frames still radiate).
+    // (same discipline as stopRadio()).  Invariant: a stale count must never
+    // let transmitPacket() return "success" while its own TX is still in
+    // flight — that makes every subsequent startReceive() fail ALREADY_RUNNING.
     (void)k_sem_take(&m_txDoneSem, K_NO_WAIT);
 
     m_txScratch.data   = data;
@@ -576,8 +554,7 @@ int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
 // (REPORT-ral-architecture gotcha #4)
 
 void RalSessionImpl::onPreCw(void) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
 
     // CW always uses LoRa packet type regardless of profile modulation
     ral_set_pkt_type(self->m_ral, RAL_PKT_TYPE_LORA);
@@ -593,13 +570,12 @@ void RalSessionImpl::onPreCw(void) {
 // CW post-callback: fires when the CW task is aborted via stopRadio().
 // Signals m_stopDoneSem so stopRadio() can unblock.
 void RalSessionImpl::onPostCw(rp_status_t /*status*/) {
-    RalSessionImpl* self = s_instance;
-    if (self == nullptr) return;
+    RalSessionImpl* self = s_instance;  // registered in init(), never cleared
     // Signal stop waiter regardless of status (abort or unlock).
     k_sem_give(&self->m_stopDoneSem);
 }
 
-int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
+int RalSessionImpl::startCw() {
     // Drain any stale count from a previous timed-out CW start (same
     // discipline as stopRadio()).
     (void)k_sem_take(&m_cwDoneSem, K_NO_WAIT);
@@ -631,25 +607,12 @@ int RalSessionImpl::startCw(const LinkProfile& /*cwProfile*/) {
 // and give m_stopDoneSem.  After that the hook_id is FINISHED and
 // transmitPacket() can safely call smtc_rac_lock_radio_access.
 //
-// Completion detection: the hook's task state (RP_TASK_STATE_FINISHED, the
-// exact precondition rp_task_enqueue() checks; idle hooks already sit there)
-// tells us whether anything was running and hence whether a post-callback is
-// coming; the post-callback itself is the authoritative completion signal
-// for an aborted task. Do not treat an observed FINISHED as completion while
-// a callback is pending: rp_task_call_aborted() frees the task (FINISHED)
-// immediately BEFORE running the callback, and enqueuing a new lock in that
-// window races the still-executing abort callback inside the radio planner.
-//
-// The previous implementation used one fixed 50 ms semaphore wait and treated
-// a timeout with unlock_rc == SUCCESS as "already idle". That misclassified
-// the common busy case: aborting a RUNNING task is only processed when the
-// USP thread next runs the RAC engine (rp_task_abort() just raises a fake
-// soft IRQ), and under load that regularly exceeded 50 ms. stopRadio() then
-// returned success while the hook was still RUNNING, so the caller's
-// immediate smtc_rac_lock_radio_access() failed — a transient
-// ConfigurationFailed on roughly 1 in 10 profile switches. unlock_rc cannot
-// disambiguate this: rp_task_abort() returns OK for idle, pending, and
-// running hooks alike.
+// Completion detection: the hook's task state (RP_TASK_STATE_FINISHED) tells
+// us whether a post-callback is coming; the post-callback itself is the
+// authoritative completion signal for an aborted task.  Do not treat an
+// observed FINISHED as completion while a callback is pending —
+// rp_task_call_aborted() frees the task BEFORE running the callback, and
+// enqueuing a new lock in that window races the radio planner.
 // ---------------------------------------------------------------------------
 
 namespace {

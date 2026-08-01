@@ -5,28 +5,12 @@
 // This header is intentionally free of USP/RAL, Zephyr, and F´ component
 // includes so it compiles host-side (unit tests, GRC) as well as on-target.
 //
-// Why this exists
-// ---------------
-// The legacy UHF path (Zephyr::LoRa) and the ground tooling built around it
-// frame every LoRa packet with a 4-byte RadioHead-style header:
-//   [destination, source, identifier, flags]
-// - adafruit_rfm9x (the CI ground-side "CircuitPython passthrough" board)
-//   unconditionally prepends these 4 bytes on send() and strips the first
-//   4 bytes on receive(with_header=False).  Its default node address 0xFF
-//   (broadcast) accepts any destination byte.
-// - Zephyr::LoRa mirrors that: LoRa.cpp prepends LoRaConfig::HEADER
-//   ({0, 0, 0, 0}) on TX and drops the first 4 bytes on RX.
-//
-// UspRadio radiates raw F´ frames, so against a RadioHead peer every
-// downlink frame loses its first 4 real bytes at the peer and every uplink
-// frame arrives with 4 foreign bytes prepended — nothing deframes.  (Root
-// cause of the PR #439 integration-radio CI failure, diagnosed 2026-07-13.)
-//
-// When the UspRadio RADIOHEAD_COMPAT parameter is set (the default), this
-// shim restores on-air parity for LoRa profiles: TX prepends four zero
-// bytes (byte-identical to LoRaConfig::HEADER) and RX strips the first
-// four bytes of every received frame.  GFSK profiles never carried the
-// header on any legacy path and are always raw.
+// Why this exists: legacy peers (Zephyr::LoRa, RadioHead/adafruit_rfm9x
+// ground radios) frame every LoRa packet with a 4-byte header
+// [destination, source, identifier, flags]; raw F´ frames do not deframe
+// against them.  With RADIOHEAD_COMPAT set (default) this shim restores
+// on-air parity for LoRa profiles: TX prepends four zero bytes and RX
+// strips the first four.  GFSK profiles are always raw.
 // ======================================================================
 
 #ifndef ZEPHYR_USP_RADIO_RADIOHEAD_SHIM_HPP

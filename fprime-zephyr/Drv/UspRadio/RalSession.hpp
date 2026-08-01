@@ -1,16 +1,8 @@
 // ======================================================================
 // \title  RalSession.hpp
-// \brief  Pure-virtual seam over every USP RAL/RAC touch (Phase 3, ADR 0001).
-//
-// This header intentionally contains NO USP or Zephyr includes so it
-// compiles host-side (unit tests, GRC) without the usp_zephyr west module.
-//
-// Threading contract (from spikes/REPORT-bench-phase0.md RSSI-delta closure):
-//   ALL radio operations must execute inside a RAC lock/transaction window
-//   on the USP thread.  RalSessionImpl enforces this; callers (UspRadio
-//   component thread) invoke these methods which internally acquire the
-//   appropriate RAC lock before touching any RAL/SPI registers.
-//   The component thread itself NEVER calls smtc_rac_* directly.
+// \brief  Pure-virtual seam over every USP RAL/RAC touch.  No USP/Zephyr
+//         includes so it compiles host-side.  Implementations acquire the
+//         RAC lock internally; callers never call smtc_rac_* directly.
 // ======================================================================
 
 #ifndef ZEPHYR_USP_RADIO_RAL_SESSION_HPP
@@ -34,10 +26,6 @@ struct LinkProfile;
 //! rssi: RSSI in dBm (typically negative I16 range).
 //! snr:  SNR in dB   (I8 range, LoRa only; GFSK passes 0).
 using RxDoneCallback = std::function<void(const uint8_t* data, std::size_t size, int16_t rssi, int8_t snr)>;
-
-//! Called by RalSessionImpl when a TX completes (optional; UspRadio does not
-//! require this for the ping-pong comStatus protocol but keeps the seam open).
-using TxDoneCallback = std::function<void()>;
 
 // ---------------------------------------------------------------------------
 // RalSession — pure-virtual interface
@@ -90,10 +78,10 @@ class RalSession {
     // CW
     // ------------------------------------------------------------------
 
-    //! Start a continuous-wave carrier.  Caller supplies the CW profile
-    //! (used for freq/power; pkt-type is set to LoRa per RAL CW requirement).
+    //! Start a continuous-wave carrier using the session's configured
+    //! freq/power (pkt-type is set to LoRa per RAL CW requirement).
     //! @returns 0 on success, negative errno on failure.
-    virtual int startCw(const LinkProfile& cwProfile) = 0;
+    virtual int startCw() = 0;
 
     //! Stop any ongoing radio operation (CW, TX, continuous RX) and return
     //! the chip to standby.  Must be safe to call at any time.
@@ -104,8 +92,8 @@ class RalSession {
     // Callback registration
     // ------------------------------------------------------------------
 
-    //! Register RX/TX done callbacks before calling startReceive().
-    virtual void setCallbacks(RxDoneCallback rxDone, TxDoneCallback txDone) = 0;
+    //! Register the RX done callback before calling startReceive().
+    virtual void setCallbacks(RxDoneCallback rxDone) = 0;
 };
 
 }  // namespace Zephyr

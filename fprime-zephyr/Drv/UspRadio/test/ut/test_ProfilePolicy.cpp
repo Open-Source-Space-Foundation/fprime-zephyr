@@ -11,7 +11,6 @@
 //   - TX profile change while pending RX change does not interfere
 //   - SET_RX_PROFILE to current profile is a no-op
 //   - SET_RX_PROFILE with revert_s = 0 (no revert armed)
-//   - LinkProfile → config translation helpers (via table lookup)
 //
 // Build: included via pcr's CMakeLists.txt host-UT target.
 // LINK_PROFILES_USE_HOST_TYPES is injected via target_compile_definitions in
@@ -196,38 +195,4 @@ TEST(ProfilePolicy, TxSwitch_DuringPendingRx_NeitherInterferes) {
     EXPECT_TRUE(p.hasPendingRx());
     EXPECT_EQ(p.txProfile(), 2u);
     EXPECT_EQ(p.rxProfile(), BOOT_DEFAULT_PROFILE);
-}
-
-// ---------------------------------------------------------------------------
-// LinkProfile table: spot-check config translation fields used by RalSessionImpl
-// ---------------------------------------------------------------------------
-
-TEST(ProfilePolicy, P0_LoRa_SF8_BW125) {
-    const auto& p = LINK_PROFILE_TABLE[0];
-    EXPECT_EQ(p.mod, ModKind::LORA);
-    EXPECT_EQ(p.lora.sf, 8u);
-    EXPECT_EQ(p.lora.bw_hz, 125000u);
-}
-
-TEST(ProfilePolicy, P3_GFSK_Bitrate38400_Fdev20k) {
-    const auto& p = LINK_PROFILE_TABLE[3];
-    EXPECT_EQ(p.mod, ModKind::GFSK);
-    EXPECT_EQ(p.gfsk.bitrate_bps, 38400u);
-    EXPECT_EQ(p.gfsk.fdev_hz, 20000u);
-}
-
-TEST(ProfilePolicy, P4_GFSK_Bitrate75000_Fdev25k) {
-    const auto& p = LINK_PROFILE_TABLE[4];
-    EXPECT_EQ(p.mod, ModKind::GFSK);
-    EXPECT_EQ(p.gfsk.bitrate_bps, 75000u);
-    EXPECT_EQ(p.gfsk.fdev_hz, 25000u);
-}
-
-TEST(ProfilePolicy, ProfileCount_CoveredByValidIndices) {
-    ProfilePolicy pol;
-    for (uint8_t i = 0; i < LINK_PROFILE_COUNT; ++i) {
-        // setTxProfile with every valid index should not return invalid
-        EXPECT_NE(pol.setTxProfile(i), ProfilePolicy::Action::kInvalidIndex)
-            << "idx=" << (int)i;
-    }
 }

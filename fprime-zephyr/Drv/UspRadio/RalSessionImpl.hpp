@@ -1,25 +1,10 @@
 // ======================================================================
 // \title  RalSessionImpl.hpp
 // \brief  On-target implementation of RalSession using Semtech USP RAL/RAC.
-//
-// COMPILE GUARD: this header (and its .cpp) must only be compiled when the
-// USP Kconfig options are enabled.  The guard matches the v5e defconfig:
-//   CONFIG_LORA_BASICS_MODEM_DRIVERS=y  (selects usp_zephyr module)
-//   CONFIG_USP=y
-//
-// v5c / v5d / host builds must NEVER include this header directly.
-// UspRadio.cpp receives the RalSession* via configure() injection.
-//
-// Threading: see REPORT-bench-phase0.md "RSSI-delta closure" — ALL RAL
-// calls happen in pre_radio_transaction callbacks while the RAC holds the
-// TCXO / radio lock.  This class never calls bare RAL functions from the
-// F' component thread.
-//
-// Callback design: smtc_rac_scheduler_config_t callbacks take no context
-// pointer (2025 RAC API).  A file-scope static RalSessionImpl* s_instance
-// (set during init()) lets the static trampolines reach instance state.
-// Only one RalSessionImpl may exist at a time — guaranteed because there
-// is one UspRadio component instance per topology.
+//         Compiled only when CONFIG_LORA_BASICS_MODEM_DRIVERS=y; host builds
+//         must never include this directly (UspRadio gets a RalSession* via
+//         configure() injection).  See RalSessionImpl.cpp for threading and
+//         callback design.
 // ======================================================================
 
 #ifndef ZEPHYR_USP_RADIO_RAL_SESSION_IMPL_HPP
@@ -33,10 +18,6 @@
 // USP / Zephyr headers — only visible in Zephyr builds
 #include <zephyr/usp/smtc_zephyr_usp_api.h>
 extern "C" {
-// Include paths (from Zephyr module CMakeLists):
-//   smtc_rac_lib/smtc_rac_api  -> include as <smtc_rac_api.h>
-//   smtc_rac_lib/smtc_ralf/src -> include as <ralf.h> / <ralf_sx126x.h>
-//   smtc_rac_lib/smtc_ral/src  -> include as <ral.h>  / <ral_defs.h>
 #include <smtc_rac_api.h>
 #include <ralf.h>
 #include <ralf_sx126x.h>
@@ -61,9 +42,9 @@ class RalSessionImpl final : public RalSession {
     int applyProfile(const LinkProfile& profile) override;
     int startReceive() override;
     int transmitPacket(const uint8_t* data, std::size_t size) override;
-    int startCw(const LinkProfile& cwProfile) override;
+    int startCw() override;
     int stopRadio() override;
-    void setCallbacks(RxDoneCallback rxDone, TxDoneCallback txDone) override;
+    void setCallbacks(RxDoneCallback rxDone) override;
 
   private:
     // ------------------------------------------------------------------
@@ -124,7 +105,6 @@ class RalSessionImpl final : public RalSession {
     bool            m_initialized;
 
     RxDoneCallback  m_rxDone;
-    TxDoneCallback  m_txDone;
 
     // Per-operation scratch (valid only while an operation is in-flight)
     TxScratch    m_txScratch;
@@ -140,13 +120,6 @@ class RalSessionImpl final : public RalSession {
     ral_pkt_type_t        m_pktType;
     ral_lora_pkt_params_t m_loraPktParams;
     ral_gfsk_pkt_params_t m_gfskPktParams;
-
-    // Receive scratchpad (filled by the USP thread in RX IRQ callback)
-    static constexpr std::size_t MAX_RX_BUF = 255;
-    uint8_t     m_rxBuf[MAX_RX_BUF];
-    std::size_t m_rxLen;
-    int16_t     m_rxRssi;
-    int8_t      m_rxSnr;
 
     // Semaphore: transmitPacket() blocks until the RAC lock window fires
     struct k_sem m_txDoneSem;

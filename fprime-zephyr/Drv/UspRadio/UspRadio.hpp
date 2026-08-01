@@ -29,8 +29,7 @@ namespace Zephyr {
 class UspRadio final : public UspRadioComponentBase {
   public:
     //! Maximum payload size (bytes).  252 = LoRa hardware limit; GFSK supports
-    //! up to 255 but we keep a single constant for CCSDS framing compatibility
-    //! (phase 5 note: per-profile limit may become a table field if needed).
+    //! up to 255 but a single constant keeps CCSDS framing compatibility.
     static constexpr FwSizeType MAX_PACKET_SIZE = 252;
 
     // ----------------------------------------------------------------------
@@ -62,7 +61,7 @@ class UspRadio final : public UspRadioComponentBase {
     // Port handlers
     // ----------------------------------------------------------------------
 
-    //! Rate-group tick: revert deadline poll + periodic telemetry
+    //! Rate-group tick: revert deadline poll
     void run_handler(FwIndexType portNum, U32 context) override;
 
     //! Incoming frame to transmit
@@ -79,7 +78,7 @@ class UspRadio final : public UspRadioComponentBase {
     // Internal interface handlers (run on component thread)
     // ----------------------------------------------------------------------
 
-    void deferredRxDone_internalInterfaceHandler(I16 rssi, I8 snr) override;
+    void deferredRxDone_internalInterfaceHandler() override;
 
     void deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
                                                    const ComCfg::FrameContext& context) override;
@@ -128,9 +127,6 @@ class UspRadio final : public UspRadioComponentBase {
     //! Monotonic millisecond timestamp (wraps Os::Queue / Zephyr k_uptime_get)
     uint64_t nowMs() const;
 
-    //! Flush all telemetry channels once.
-    void flushTelemetry();
-
     // ----------------------------------------------------------------------
     // State
     // ----------------------------------------------------------------------
@@ -138,16 +134,10 @@ class UspRadio final : public UspRadioComponentBase {
     ProfilePolicy     m_policy;
     UspTransmitState  m_transmitState;
 
-    // Receive ring (SPSC: USP-thread producer via onRxDone, component-thread
-    // consumer via deferredRxDone).  Replaces the single scratch slot, which
-    // HWIL-failed at saturation (2026-07-11 session 4): a second frame arriving
-    // before the component thread drained the queue overwrote the first AND
-    // made every queued handler invocation re-read (and re-count) the latest
-    // frame — duplicate delivery upstream + BytesReceived overcount.
-    // Indexes increment monotonically (unsigned wrap is safe: DEPTH is a power
-    // of two, and head - tail stays correct across wrap).  Producer owns
-    // m_rxHead, consumer owns m_rxTail; release/acquire pairs order the slot
-    // payload copies against index publication.
+    // Receive ring (SPSC: USP-thread producer onRxDone, component-thread
+    // consumer deferredRxDone).  Producer owns m_rxHead, consumer owns m_rxTail;
+    // release/acquire pairs order slot payload copies against index publication.
+    // Indexes increment monotonically (unsigned wrap safe: DEPTH is a power of two).
     static constexpr FwSizeType RX_SCRATCH_SIZE = MAX_PACKET_SIZE;
     static constexpr U32 RX_RING_DEPTH = 4;  // must be a power of two
     struct RxSlot {
@@ -166,18 +156,13 @@ class UspRadio final : public UspRadioComponentBase {
 
     //! TX frames accepted by dataIn_handler but not yet processed by
     //! deferredTxPacket (incremented on the Svc.Com caller thread, decremented
-    //! at deferred-handler entry).  When > 0 after a transmit, more TX work is
-    //! already queued behind us, so the per-frame continuous-RX re-arm is
-    //! skipped: the TX→re-arm→stop→TX dance costs ~50 ms/frame and throttled
-    //! saturated P3 TX to ~19 kbps vs the 33.5 kbps airtime ceiling (HWIL
-    //! 2026-07-11 session 4).  Every other radio-touching path still ends
-    //! re-armed, and the DISABLING/DISABLED seams re-arm unconditionally, so
-    //! the radio is never left deaf once the TX queue drains.
+    //! at deferred-handler entry).  When > 0 the per-frame continuous-RX re-arm
+    //! is skipped (throughput); the DISABLING/DISABLED seams re-arm
+    //! unconditionally, so the radio is never left deaf once the queue drains.
     std::atomic<U32>  m_pendingTxFrames;
 
     //! Set by the ENABLED TX path: re-arm continuous RX at the handler tail,
-    //! after comStatusOut has released the one-in-flight com pipeline (so a
-    //! queued next frame has a chance to reach dataIn and suppress the re-arm).
+    //! after comStatusOut has released the one-in-flight com pipeline.
     bool              m_rearmAfterTx;
 
     //! TX staging buffer for RadioHead-compat mode (header + payload).
@@ -191,12 +176,9 @@ class UspRadio final : public UspRadioComponentBase {
     FwSizeType m_bytesReceived;
     U32        m_rxReverts;
 
-    //! True when ProfilePolicy has committed an RX auto-revert but the
-    //! hardware apply (stopRadio → applyProfile → startReceive) has not yet
-    //! succeeded — retried on each run tick.  tick() commits the revert
-    //! irreversibly before returning kRevert, so this flag is the only record
-    //! that the chip still needs re-programming.  Cleared by a successful
-    //! explicit SET_RX_PROFILE apply (which supersedes the revert re-arm).
+    //! True when ProfilePolicy has committed an RX auto-revert but the hardware
+    //! apply has not yet succeeded — retried each run tick (this flag is the only
+    //! record).  Cleared by a successful explicit SET_RX_PROFILE apply.
     bool m_revertRearmPending;
 };
 

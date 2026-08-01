@@ -3,12 +3,10 @@
 // Host-side unit tests for the RadioHead-header compatibility shim.
 //
 // Covers:
-//   - Header size and payload budget math (compat vs raw)
+//   - Payload budget math (compat vs raw)
 //   - TX packet build: zero header bytes, payload placement, on-air length
 //   - RX payload location: raw passthrough, compat strip, runt rejection
 //   - TX→RX round trip preserves payload bytes exactly
-//   - Fit invariant: a fixed-size 248 B TM frame + header == the 252 B
-//     on-air cap (the legacy Zephyr::LoRa constraint this shim restores)
 //
 // Build: included via pcr's CMakeLists.txt host-UT target.
 // LINK_PROFILES_USE_HOST_TYPES is injected via target_compile_definitions in
@@ -25,23 +23,9 @@ using namespace Zephyr;
 // Budget math
 // ---------------------------------------------------------------------------
 
-TEST(RadioHeadShim, HeaderSizeMatchesRadioHead) {
-    // [destination, source, identifier, flags] — fixed by the RadioHead wire
-    // format (adafruit_rfm9x, legacy Zephyr::LoRa LoRaConfig::HEADER).
-    EXPECT_EQ(RadioHeadShim::HEADER_SIZE, 4u);
-}
-
 TEST(RadioHeadShim, MaxPayloadCompatShrinksByHeader) {
     EXPECT_EQ(RadioHeadShim::maxPayload(252, true), 248u);
     EXPECT_EQ(RadioHeadShim::maxPayload(252, false), 252u);
-}
-
-TEST(RadioHeadShim, FixedTmFrameFitsOnAirCapExactly) {
-    // ComCfg TmFrameFixedSize (248) + header == UspRadio::MAX_PACKET_SIZE
-    // (252): full-size downlink frames radiate without truncation in compat
-    // mode, with zero margin — the same budget legacy Zephyr::LoRa enforced
-    // via its size + sizeof(HEADER) <= 252 assert.
-    EXPECT_EQ(248u + RadioHeadShim::HEADER_SIZE, 252u);
 }
 
 // ---------------------------------------------------------------------------

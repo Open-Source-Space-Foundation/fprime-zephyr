@@ -1,6 +1,6 @@
 module Zephyr {
 
-    @ Transmit-enable state - identical to LoRa.fpp (TRANSMIT verbatim)
+    @ Transmit-enable state
     enum UspTransmitState : U8 {
         ENABLED
         DISABLED
@@ -25,14 +25,12 @@ module Zephyr {
         @ Import the buffer allocation interface (allocate/deallocate)
         import Svc.BufferAllocation
 
-        @ Rate-group servicing: revert-deadline tick + periodic telemetry flush
+        @ Rate-group servicing: revert-deadline tick
         sync input port run: Svc.Sched
 
-        @ Internal port - RX done (fires from USP callback; runs on component thread)
-        internal port deferredRxDone(
-            rssi: I16
-            snr:  I8
-        ) priority 10
+        @ Internal port - RX done (fires from USP callback; runs on component thread).
+        @ Frame data (incl. rssi/snr) travels in the RX ring; this message only wakes the consumer.
+        internal port deferredRxDone priority 10
 
         @ Internal port - TX packet (deferred from dataIn; runs on component thread)
         internal port deferredTxPacket(
@@ -76,13 +74,13 @@ module Zephyr {
         param RADIOHEAD_COMPAT: bool default true
 
         # ------------------------------------------------------------------
-        # Commands - verbatim from LoRa.fpp + profile commands
+        # Commands
         # ------------------------------------------------------------------
 
-        @ Start/stop transmission on the UHF USP radio (verbatim from LoRa)
+        @ Start/stop transmission on the UHF USP radio
         async command TRANSMIT(enabled: UspTransmitState)
 
-        @ Continuous-wave transmission for N seconds then return to RX (verbatim from LoRa)
+        @ Continuous-wave transmission for N seconds then return to RX
         async command CONTINUOUS_WAVE(seconds: U16)
 
         @ Select the active TX link profile
@@ -177,9 +175,6 @@ module Zephyr {
 
         @ Currently active RX profile index
         telemetry RxProfile: LinkProfileId update on change
-
-        @ Profile table version (from LinkProfiles.hpp)
-        telemetry ProfileTableVersion: U8 update on change
 
         @ Number of RX auto-reverts since boot
         telemetry RxReverts: U32 update on change

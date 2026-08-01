@@ -1,19 +1,7 @@
 // ======================================================================
 // \title  UspRadio.cpp
 // \brief  Active UHF radio component using Semtech USP (RAL) on SX1262.
-//
-// Threading model (ADR 0001, SBand deferred-handler pattern):
-//   1. dataIn fires on the Svc.Com calling thread → enqueues deferredTxPacket
-//   2. USP RX callback fires on USP thread → calls onRxDone() → enqueues
-//      deferredRxDone (stores rssi/snr in scratch) → component thread handles
-//   3. All commands are async → internally invoked on component thread
-//   4. run_handler ticks ProfilePolicy for revert deadline
-//   All RAL/SPI work happens in RalSession methods (component thread only).
-//
-// Buffer ownership (identical to LoRa.cpp / SBand.cpp):
-//   TX: dataIn gives us a buffer; we return it via dataReturnOut after TX.
-//   RX: we allocate via allocate_out, send via dataOut; caller returns via
-//       dataReturnIn → we deallocate_out.
+//         See UspRadio.hpp for the threading model and buffer ownership.
 // ======================================================================
 
 #include "fprime-zephyr/Drv/UspRadio/UspRadio.hpp"
@@ -68,9 +56,7 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
     m_session->setCallbacks(
         [this](const uint8_t* data, std::size_t size, int16_t rssi, int8_t snr) {
             this->onRxDone(data, size, rssi, snr);
-        },
-        []() {}  // TX done: no action needed beyond the sem in RalSessionImpl
-    );
+        });
 
     if (m_session->init() != 0) {
         Fw::Logger::log("[UspRadio] session.init() failed\n");
@@ -96,7 +82,15 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
         this->comStatusOut_out(0, status);
     }
 
-    flushTelemetry();
+    // Boot-flush telemetry so channels have initial values before first activity.
+    this->tlmWrite_BytesSent(m_bytesSent);
+    this->tlmWrite_BytesReceived(m_bytesReceived);
+    this->tlmWrite_LastRssi(m_rxRssi);
+    this->tlmWrite_LastSnr(m_rxSnr);
+    this->tlmWrite_TxProfile(static_cast<LinkProfileId::T>(m_policy.txProfile()));
+    this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(m_policy.rxProfile()));
+    this->tlmWrite_RxReverts(m_rxReverts);
+    this->tlmWrite_RxDropped(m_rxDropped.load(std::memory_order_relaxed));
     return true;
 }
 
@@ -129,9 +123,7 @@ void UspRadio::onRxDone(const uint8_t* data, std::size_t size, int16_t rssi, int
     m_rxHead.store(head + 1, std::memory_order_release);
 
     // Post internal message — runs on component thread
-    this->deferredRxDone_internalInterfaceInvoke(
-        static_cast<I16>(rssi),
-        static_cast<I8>(snr));
+    this->deferredRxDone_internalInterfaceInvoke();
 }
 
 // ---------------------------------------------------------------------------
@@ -151,21 +143,16 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
         this->tlmWrite_RxReverts(m_rxReverts);
         this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(toProfile));
 
-        // tick() has already committed the revert in the policy (rxProfile =
-        // boot default, pending cleared) — only the HARDWARE apply remains.
-        // Mark it pending and perform it below so a busy radio retries on
-        // subsequent ticks instead of dropping the revert (HWIL 2026-07-11
-        // slice-13: without this the revert was cosmetic — telemetry said P0
-        // while the chip stayed configured and armed on the old profile).
+        // tick() has already committed the revert in the policy — only the
+        // HARDWARE apply remains.  Mark it pending so a busy radio retries on
+        // subsequent ticks instead of dropping the revert.
         m_revertRearmPending = true;
     }
 
     if (m_revertRearmPending) {
-        // Mirror the deferredSetRxProfile discipline: the reverted-FROM
-        // profile's continuous RX still holds the RAC lock (RUNNING), so
-        // stopRadio() must succeed before applyProfile()/startReceive() can.
-        // Honor its rc (751a1a8 semantics); there is no external retry for a
-        // revert, so on failure keep the flag set and retry next tick.
+        // stopRadio() must succeed before applyProfile()/startReceive() can
+        // (RAC ALREADY_RUNNING guard — see deferredTxPacket).  No external
+        // retry exists for a revert: on failure keep the flag and retry next tick.
         if (m_session->stopRadio() != 0) {
             this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
             return;
@@ -204,9 +191,8 @@ void UspRadio::dataReturnIn_handler(FwIndexType /*portNum*/,
 // deferredRxDone — component thread
 // ---------------------------------------------------------------------------
 
-void UspRadio::deferredRxDone_internalInterfaceHandler(I16 /*rssi*/, I8 /*snr*/) {
-    // Pop one ring slot (message args are ignored: the slot carries the
-    // rssi/snr sampled with ITS frame, not the latest one).
+void UspRadio::deferredRxDone_internalInterfaceHandler() {
+    // Pop one ring slot (the slot carries the frame's data and rssi/snr).
     const U32 tail = m_rxTail.load(std::memory_order_relaxed);
     const U32 head = m_rxHead.load(std::memory_order_acquire);
     if (tail == head) {
@@ -291,7 +277,7 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             RadioHeadShim::maxPayload(static_cast<U32>(MAX_PACKET_SIZE), rhCompat));
         FwSizeType size = data.getSize();
         if (size > maxPayload) {
-            size = maxPayload;  // truncate; Phase 5 will validate framing
+            size = maxPayload;  // truncate
         }
 
         // Stop continuous RX before TX.  startReceive() holds the RAC lock
@@ -328,19 +314,14 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             this->log_WARNING_HI_SendFailed_ThrottleClear();
         }
 
-        // Re-arm continuous RX after TX — deferred to the tail of this
-        // handler, AFTER comStatusOut releases the com pipeline.  The com
-        // protocol is one-in-flight (comQueue holds the next frame until it
-        // sees our comStatus), so at this point m_pendingTxFrames is ALWAYS 0
-        // and an inline skip check never fires (HWIL 2026-07-11 r5).  See the
-        // rearm block below.
+        // Re-arm continuous RX after TX — deferred to the handler tail, AFTER
+        // comStatusOut releases the one-in-flight com pipeline (see below).
         m_rearmAfterTx = true;
     } else if (m_transmitState == UspTransmitState::DISABLING) {
         m_transmitState = UspTransmitState::DISABLED;
-        // TX episode over — guarantee continuous RX is armed (HWIL 2026-07-11:
-        // without this the board stays deaf after TRANSMIT DISABLED).  Stop
-        // first: if the last ENABLED frame's re-arm succeeded, RX is already
-        // RUNNING and a bare startReceive() would fail ALREADY_RUNNING.
+        // TX episode over — guarantee continuous RX is armed or the board
+        // stays deaf after TRANSMIT DISABLED.  Stop first: if the last frame's
+        // re-arm succeeded, a bare startReceive() would fail ALREADY_RUNNING.
         if ((m_session->stopRadio() != 0) || (m_session->startReceive() != 0)) {
             this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
         }
@@ -351,14 +332,12 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
 
     if (m_rearmAfterTx) {
         m_rearmAfterTx = false;
-        // comStatus is out — if the com pipeline has another frame, it is on
-        // its way to dataIn (on-board port chain through comQueue/framer,
-        // typically < a few ms).  Give it a short bounded window; if a frame
-        // shows up, skip the re-arm entirely: the TX→re-arm→stop→TX dance
-        // costs ~50 ms/frame and throttled saturated P3 TX to ~19 kbps vs the
-        // 33.5 kbps airtime ceiling (HWIL 2026-07-11 sessions 4/5).  Deaf-
-        // safe: the episode's final frame exhausts the window and re-arms,
-        // and the DISABLING/DISABLED seams re-arm unconditionally.
+        // comStatus is out — if the com pipeline has another frame it reaches
+        // dataIn within a few ms.  Give it a short bounded window; if a frame
+        // shows up, skip the re-arm (the TX→re-arm→stop→TX dance costs
+        // ~50 ms/frame and throttles saturated TX).  Deaf-safe: the episode's
+        // final frame exhausts the window and re-arms, and the
+        // DISABLING/DISABLED seams re-arm unconditionally.
 #ifdef __ZEPHYR__
         for (int i = 0; (i < 5) && (m_pendingTxFrames.load(std::memory_order_relaxed) == 0); i++) {
             k_sleep(K_MSEC(1));
@@ -379,7 +358,6 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
 void UspRadio::deferredTransmitCmd_internalInterfaceHandler(const UspTransmitState& enabled) {
     if (enabled == UspTransmitState::ENABLED) {
         if (m_transmitState == UspTransmitState::DISABLED) {
-            m_transmitState = UspTransmitState::ENABLED;
             Fw::Success comStatus = Fw::Success::SUCCESS;
             this->comStatusOut_out(0, comStatus);
         }
@@ -414,22 +392,15 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         this->log_WARNING_HI_InvalidProfile(profile);
         return;
     }
-    // Stop continuous RX before applying a new TX profile (same ALREADY_RUNNING
-    // guard as CW and deferredSetRxProfile).  If TX is actively saturating the
-    // RAC hook (rate group feeding frames back-to-back), stopRadio() cannot
-    // abort it within its deadline and returns non-zero; applyProfile() would
-    // then be guaranteed to fail the same way (ALREADY_RUNNING), so skip the
-    // attempt rather than spam ConfigurationFailed every cycle.  m_txProfile
-    // is already recorded in the policy above; a later SET_TX_PROFILE retry
-    // (e.g. once TX is disabled or quiesces) will apply it to hardware.
+    // Stop continuous RX before applying (RAC ALREADY_RUNNING guard — see
+    // deferredTxPacket).  On failure skip the apply: the policy already holds
+    // m_txProfile, and a later SET_TX_PROFILE retry applies it to hardware.
     if (m_session->stopRadio() != 0) {
         this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::TX);
         return;
     }
     (void)applyProfile(idx, UspRadioDirection::TX);
-    // Re-arm continuous RX (mirrors deferredSetRxProfile).  Without this the
-    // radio is left in standby after the TX-profile apply — deaf until a
-    // different-profile SET_RX_PROFILE or reboot (HWIL 2026-07-11).
+    // Re-arm continuous RX — otherwise the radio is left deaf in standby.
     if (m_session->startReceive() != 0) {
         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
     }
@@ -449,12 +420,10 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
         return;
     }
     if (action == ProfilePolicy::Action::kNoOp) {
-        // Same-profile SET_RX_PROFILE: no policy/revert change, but treat it
-        // as an explicit "ensure RX is armed on this profile" request (HWIL
-        // 2026-07-11: deaf boards could only be recovered with a different-
-        // profile cycle because this path short-circuited without re-arming).
-        // Re-apply too: a preceding TX episode may have left TX-profile
-        // modulation params on the chip.
+        // Same-profile SET_RX_PROFILE: no policy/revert change, but treat it as
+        // an explicit "ensure RX is armed on this profile" request (operator
+        // deaf-recovery lever).  Re-apply too: a preceding TX episode may have
+        // left TX-profile modulation params on the chip.
         if (m_session->stopRadio() != 0) {
             this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
             return;
@@ -469,24 +438,10 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
         m_revertRearmPending = false;
         return;
     }
-    // kApplyRx — stop continuous RX (which holds the RAC lock open in RUNNING
-    // state), apply the new profile, then re-arm RX.  Without stopRadio(),
-    // applyProfile() → smtc_rac_lock_radio_access returns ALREADY_RUNNING →
-    // SMTC_RAC_ERROR → failure, silently leaving the profile unchanged.
-    //
-    // If TX is actively saturating the RAC hook (rate group feeding frames
-    // back-to-back), stopRadio() cannot abort it within its deadline and
-    // returns non-zero; applyProfile() would then be guaranteed to fail the
-    // same way.  Previously this fell through to applyProfile() anyway, which
-    // failed, logged ConfigurationFailed, and left the caller to retry
-    // indefinitely — every retry repeating the same failed stopRadio() +
-    // applyProfile() pair once every ~25 s until TRANSMIT was disabled.
-    // Skip the attempt instead: the pending profile + revert deadline armed
-    // by setRxProfile() above are left completely untouched, so (a) the
-    // auto-revert timer still fires on schedule if the change never lands
-    // before revert_s elapses, and (b) a later SET_RX_PROFILE retry (or the
-    // next tick once TX quiesces) re-attempts the apply with fresh state —
-    // no revert bookkeeping is corrupted either way.
+    // kApplyRx — stop RX, apply the new profile, re-arm RX (RAC ALREADY_RUNNING
+    // guard — see deferredTxPacket).  On stop failure skip the apply: pending
+    // profile + revert deadline stay untouched, so the auto-revert still fires
+    // on schedule and a later retry re-attempts with fresh state.
     if (m_session->stopRadio() != 0) {
         this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
         return;
@@ -510,29 +465,20 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
 // ---------------------------------------------------------------------------
 
 void UspRadio::deferredContinuousWave_internalInterfaceHandler(U16 seconds) {
-    // Use the current TX profile for CW (freq/power; pkt-type overridden to LoRa by RalSessionImpl)
-    U8 txIdx = m_policy.txProfile();
-    const LinkProfile& cwProfile = LINK_PROFILE_TABLE[txIdx];
-
-    // Stop continuous RX before CW.  startReceive() holds the RAC lock window
-    // open indefinitely (RP_TASK_STATE_RUNNING on this hook_id), so a subsequent
-    // smtc_rac_lock_radio_access call for CW would return
-    // RP_TASK_STATUS_ALREADY_RUNNING → SMTC_RAC_ERROR → -EIO.
-    // stopRadio() aborts the running task via smtc_rac_unlock_radio_access and
-    // waits for the post-callback to confirm the hook_id is FINISHED.
+    // Stop continuous RX before CW (RAC ALREADY_RUNNING guard — see deferredTxPacket).
     (void)m_session->stopRadio();
 
-    int rc = m_session->startCw(cwProfile);
+    // CW uses the session's configured freq/power; pkt-type is forced to LoRa
+    // by RalSessionImpl per the RAL CW requirement.
+    int rc = m_session->startCw();
     if (rc != 0) {
         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::TX);
         return;
     }
 
-    // Block the component thread for the requested CW duration.
-    // The component queue is stalled during this time (matching legacy LoRa.cpp
-    // behaviour: lora_test_cw() blocks).  The USP thread continues to run the RAC.
-    // For durations ≤ 10 s this is acceptable per safety limits; a k_timer
-    // approach would be cleaner but adds complexity deferred to Phase 4.
+    // Block the component thread for the CW duration (component queue stalls;
+    // the USP thread keeps running the RAC).  Acceptable per safety limits
+    // for durations <= 10 s.
 #ifdef __ZEPHYR__
     k_sleep(K_SECONDS(seconds));
 #else
@@ -620,18 +566,6 @@ uint64_t UspRadio::nowMs() const {
     // Host test stub: callers supply their own timestamps via ProfilePolicy
     return 0;
 #endif
-}
-
-void UspRadio::flushTelemetry() {
-    this->tlmWrite_BytesSent(m_bytesSent);
-    this->tlmWrite_BytesReceived(m_bytesReceived);
-    this->tlmWrite_LastRssi(m_rxRssi);
-    this->tlmWrite_LastSnr(m_rxSnr);
-    this->tlmWrite_TxProfile(static_cast<LinkProfileId::T>(m_policy.txProfile()));
-    this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(m_policy.rxProfile()));
-    this->tlmWrite_ProfileTableVersion(LINK_PROFILE_TABLE_VERSION);
-    this->tlmWrite_RxReverts(m_rxReverts);
-    this->tlmWrite_RxDropped(m_rxDropped.load(std::memory_order_relaxed));
 }
 
 }  // namespace Zephyr
