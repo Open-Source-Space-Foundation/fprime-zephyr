@@ -37,7 +37,8 @@ UspRadio::UspRadio(const char* compName)
       m_bytesSent(0),
       m_bytesReceived(0),
       m_rxReverts(0),
-      m_revertRearmPending(false) {}
+      m_revertRearmPending(false),
+      m_radioEverOn(false) {}
 
 UspRadio::~UspRadio() {}
 
@@ -80,6 +81,7 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
     if (initialTransmitState == UspTransmitState::ENABLED) {
         Fw::Success status = Fw::Success::SUCCESS;
         this->comStatusOut_out(0, status);
+        this->signalFirstStart();
     }
 
     // Boot-flush telemetry so channels have initial values before first activity.
@@ -352,6 +354,37 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
 }
 
 // ---------------------------------------------------------------------------
+// enableTransmit / disableTransmit — StartupManager quiescence contract
+//
+// Fw.Signal sync input ports: they arrive on the *caller's* thread (the rate
+// group driving StartupManager).  They therefore do no radio work inline —
+// they enqueue the same internal message the async TRANSMIT command uses, so
+// there is exactly one transmit-state machine and one thread that touches the
+// RAL.  Semantics are verbatim from Zephyr::LoRa::setTransmitState():
+// enable -> ENABLED, disable -> DISABLING.
+// ---------------------------------------------------------------------------
+
+void UspRadio::enableTransmit_handler(FwIndexType portNum) {
+    (void)portNum;
+    this->deferredTransmitCmd_internalInterfaceInvoke(UspTransmitState::ENABLED);
+}
+
+void UspRadio::disableTransmit_handler(FwIndexType portNum) {
+    (void)portNum;
+    this->deferredTransmitCmd_internalInterfaceInvoke(UspTransmitState::DISABLING);
+}
+
+void UspRadio::signalFirstStart() {
+    if (m_radioEverOn) {
+        return;
+    }
+    m_radioEverOn = true;
+    if (this->isConnected_radioFirstStart_OutputPort(0)) {
+        this->radioFirstStart_out(0);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // deferredTransmitCmd — component thread
 // ---------------------------------------------------------------------------
 
@@ -362,6 +395,7 @@ void UspRadio::deferredTransmitCmd_internalInterfaceHandler(const UspTransmitSta
             this->comStatusOut_out(0, comStatus);
         }
         m_transmitState = UspTransmitState::ENABLED;
+        this->signalFirstStart();
     } else {
         if (m_transmitState == UspTransmitState::ENABLED) {
             // A trailing frame is expected: its DISABLING→DISABLED transition

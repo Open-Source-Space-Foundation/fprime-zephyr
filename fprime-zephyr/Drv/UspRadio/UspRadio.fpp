@@ -183,6 +183,26 @@ module Zephyr {
         telemetry RxDropped: U32 update on change
 
         # ------------------------------------------------------------------
+        # Startup transmit-quiescence contract (parity with Zephyr::LoRa)
+        # ------------------------------------------------------------------
+
+        @ Enable radio transmission.  Signal-only equivalent of
+        @ TRANSMIT(ENABLED); driven by StartupManager once the launch
+        @ quiescence period has elapsed.  Sync port: the handler only enqueues
+        @ onto the component queue, so no RAL/SPI work runs on the caller thread.
+        sync input port enableTransmit: Fw.Signal
+
+        @ Disable radio transmission.  Signal-only equivalent of
+        @ TRANSMIT(DISABLING); same deferral rules as enableTransmit.
+        sync input port disableTransmit: Fw.Signal
+
+        @ Emitted exactly once per boot, the first time radio transmit becomes
+        @ enabled (whether via startRadio(ENABLED), the TRANSMIT command, or the
+        @ enableTransmit port).  Consumed by StartupManager to suppress its
+        @ hard-coded fallback enable.  Equivalent to Zephyr::LoRa.loraFirstStart.
+        output port radioFirstStart: Fw.Signal
+
+        # ------------------------------------------------------------------
         # Standard AC Ports
         # ------------------------------------------------------------------
 

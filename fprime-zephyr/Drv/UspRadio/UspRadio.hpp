@@ -74,6 +74,15 @@ class UspRadio final : public UspRadioComponentBase {
                               Fw::Buffer& data,
                               const ComCfg::FrameContext& context) override;
 
+    //! StartupManager transmit-enable signal.  Sync port on the caller thread:
+    //! only enqueues deferredTransmitCmd(ENABLED) — all radio work stays on the
+    //! component thread, reusing the TRANSMIT command's state machine verbatim.
+    void enableTransmit_handler(FwIndexType portNum) override;
+
+    //! StartupManager transmit-disable signal.  Enqueues
+    //! deferredTransmitCmd(DISABLING), identical to TRANSMIT(DISABLING).
+    void disableTransmit_handler(FwIndexType portNum) override;
+
     // ----------------------------------------------------------------------
     // Internal interface handlers (run on component thread)
     // ----------------------------------------------------------------------
@@ -126,6 +135,12 @@ class UspRadio final : public UspRadioComponentBase {
 
     //! Monotonic millisecond timestamp (wraps Os::Queue / Zephyr k_uptime_get)
     uint64_t nowMs() const;
+
+    //! Emit radioFirstStart once per boot, on the first transmit-enable.
+    //! Idempotent; a no-op if the port is unconnected.  Called only from
+    //! startRadio() (before the component task runs) and from the component
+    //! thread, so the latch needs no synchronization.
+    void signalFirstStart();
 
     // ----------------------------------------------------------------------
     // State
@@ -180,6 +195,10 @@ class UspRadio final : public UspRadioComponentBase {
     //! apply has not yet succeeded — retried each run tick (this flag is the only
     //! record).  Cleared by a successful explicit SET_RX_PROFILE apply.
     bool m_revertRearmPending;
+
+    //! Latched true after transmit is first enabled; gates radioFirstStart to a
+    //! single emission per boot (mirrors Zephyr::LoRa::m_lora_ever_on).
+    bool m_radioEverOn;
 };
 
 }  // namespace Zephyr
