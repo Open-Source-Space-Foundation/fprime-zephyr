@@ -160,12 +160,8 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
             this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
             return;
         }
-        if (!applyProfile(m_policy.rxProfile(), UspRadioDirection::RX)) {
-            return;  // ConfigurationFailed logged by applyProfile; retry next tick
-        }
-        if (m_session->startReceive() != 0) {
-            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-            return;  // retry next tick
+        if (!rearmRx()) {
+            return;  // ConfigurationFailed already logged; retry next tick
         }
         m_revertRearmPending = false;
     }
@@ -337,8 +333,10 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         // TX episode over — guarantee continuous RX is armed or the board
         // stays deaf after TRANSMIT DISABLED.  Stop first: if the last frame's
         // re-arm succeeded, a bare startReceive() would fail ALREADY_RUNNING.
-        if ((m_session->stopRadio() != 0) || (m_session->startReceive() != 0)) {
+        if (m_session->stopRadio() != 0) {
             this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        } else {
+            (void)rearmRx();
         }
     }
 
@@ -359,9 +357,9 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         }
 #endif
         if (m_pendingTxFrames.load(std::memory_order_relaxed) == 0) {
-            if (m_session->startReceive() != 0) {
-                this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-            }
+            // Re-apply the RX profile before arming — the chip was last
+            // configured for TX modulation just above (transmitPacket()).
+            (void)rearmRx();
         }
     }
 }
@@ -421,8 +419,10 @@ void UspRadio::deferredTransmitCmd_internalInterfaceHandler(const UspTransmitSta
             // recover-RX lever (repeat TRANSMIT DISABLED), since a
             // same-profile SET_RX_PROFILE is a kNoOp and does not re-arm.
             m_transmitState = UspTransmitState::DISABLED;
-            if ((m_session->stopRadio() != 0) || (m_session->startReceive() != 0)) {
+            if (m_session->stopRadio() != 0) {
                 this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+            } else {
+                (void)rearmRx();
             }
         }
     }
@@ -447,11 +447,11 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         return;
     }
     (void)applyProfile(idx, UspRadioDirection::TX);
-    // Re-arm continuous RX — otherwise the radio is left deaf in standby.
-    if (m_session->startReceive() != 0) {
-        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-    }
     this->tlmWrite_TxProfile(profile);
+    // Re-arm continuous RX on the RX policy's profile — NOT the TX profile
+    // just applied above.  See rearmRx() for why a bare startReceive() here
+    // would leave the chip listening in TX modulation.
+    (void)rearmRx();
 }
 
 // ---------------------------------------------------------------------------
@@ -475,9 +475,7 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
             this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
             return;
         }
-        (void)applyProfile(idx, UspRadioDirection::RX);
-        if (m_session->startReceive() != 0) {
-            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        if (!rearmRx()) {
             return;
         }
         // RX is now armed on an explicitly requested profile — supersedes any
@@ -493,12 +491,7 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
         this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
         return;
     }
-    if (!applyProfile(idx, UspRadioDirection::RX)) {
-        return;
-    }
-    if (m_session->startReceive() != 0) {
-        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-    } else {
+    if (rearmRx()) {
         // RX is now armed on an explicitly requested profile — supersedes any
         // pending revert hardware re-arm.
         m_revertRearmPending = false;
@@ -537,11 +530,7 @@ void UspRadio::deferredContinuousWave_internalInterfaceHandler(U16 seconds) {
     (void)m_session->stopRadio();
 
     // Re-apply current RX profile and restart receive
-    U8 rxIdx = m_policy.rxProfile();
-    (void)applyProfile(rxIdx, UspRadioDirection::RX);
-    if (m_session->startReceive() != 0) {
-        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-    }
+    (void)rearmRx();
 }
 
 // ---------------------------------------------------------------------------
@@ -585,6 +574,17 @@ bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction) {
     }
     LinkProfileId profileId = static_cast<LinkProfileId::T>(idx);
     this->log_ACTIVITY_HI_ProfileChanged(direction, profileId);
+    return true;
+}
+
+bool UspRadio::rearmRx() {
+    if (!applyProfile(m_policy.rxProfile(), UspRadioDirection::RX)) {
+        return false;  // ConfigurationFailed already logged by applyProfile
+    }
+    if (m_session->startReceive() != 0) {
+        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        return false;
+    }
     return true;
 }
 
