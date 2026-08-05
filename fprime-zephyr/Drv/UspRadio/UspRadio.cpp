@@ -39,7 +39,8 @@ UspRadio::UspRadio(const char* compName)
       m_bytesReceived(0),
       m_rxReverts(0),
       m_revertRearmPending(false),
-      m_radioEverOn(false) {}
+      m_radioEverOn(false),
+      m_comStatusOwed(false) {}
 
 UspRadio::~UspRadio() {}
 
@@ -78,10 +79,15 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
         return false;
     }
 
-    // If initially enabled, kick off the ping-pong comStatus protocol
-    if (initialTransmitState == UspTransmitState::ENABLED) {
+    // If initially enabled, kick off the ping-pong comStatus protocol.
+    // Guard with m_comStatusOwed for defense-in-depth (startRadio() only runs
+    // once, before any frame could have primed it, so this should always be
+    // false here) — see m_comStatusOwed for the one-in-flight invariant.
+    if ((initialTransmitState == UspTransmitState::ENABLED) &&
+        !m_comStatusOwed.load(std::memory_order_relaxed)) {
         Fw::Success status = Fw::Success::SUCCESS;
         this->comStatusOut_out(0, status);
+        m_comStatusOwed.store(true, std::memory_order_relaxed);
         this->signalFirstStart();
     }
 
@@ -177,6 +183,12 @@ void UspRadio::dataIn_handler(FwIndexType /*portNum*/,
     // Count before enqueue: deferredTxPacket sees >0 while more frames are
     // in flight and skips the per-frame RX re-arm (see m_pendingTxFrames).
     m_pendingTxFrames.fetch_add(1, std::memory_order_relaxed);
+    // A frame arriving here proves Svc::ComQueue dequeued and sent it, which
+    // only happens after it consumed our last outstanding comStatus (i.e. it
+    // was READY and is now WAITING again).  Clear the debt so the next
+    // comStatusOut_out (emitted at the end of deferredTxPacket, on the
+    // component thread) is known-safe.  See m_comStatusOwed.
+    m_comStatusOwed.store(false, std::memory_order_relaxed);
     this->deferredTxPacket_internalInterfaceInvoke(data, context);
 }
 
@@ -341,7 +353,13 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
     }
 
     this->dataReturnOut_out(0, mutableData, context);
+    // dataIn_handler cleared m_comStatusOwed when this frame arrived (it
+    // proved ComQueue consumed the prior status and is WAITING again), so
+    // this emission is always the one status ComQueue expects per frame —
+    // no guard needed, just re-mark the debt so the next priming/attempt
+    // knows a status is now outstanding.  See m_comStatusOwed.
     this->comStatusOut_out(0, returnStatus);
+    m_comStatusOwed.store(true, std::memory_order_relaxed);
 
     if (m_rearmAfterTx) {
         m_rearmAfterTx = false;
@@ -401,9 +419,19 @@ void UspRadio::signalFirstStart() {
 
 void UspRadio::deferredTransmitCmd_internalInterfaceHandler(const UspTransmitState& enabled) {
     if (enabled == UspTransmitState::ENABLED) {
-        if (m_transmitState == UspTransmitState::DISABLED) {
+        // Only prime ComQueue's pipeline if no comStatus is currently
+        // outstanding (ComQueue is WAITING).  Without this guard, a
+        // DISABLED->ENABLED transition after a deaf-recovery
+        // DISABLED/DISABLED cycle (repeat TRANSMIT DISABLED, a documented
+        // operator lever elsewhere in this handler) with no frame ever
+        // consumed in between would emit a second SUCCESS into an
+        // already-READY ComQueue, which is an FW_ASSERT/crash-loop bug in
+        // the pinned Svc::ComQueue.  See m_comStatusOwed.
+        if ((m_transmitState == UspTransmitState::DISABLED) &&
+            !m_comStatusOwed.load(std::memory_order_relaxed)) {
             Fw::Success comStatus = Fw::Success::SUCCESS;
             this->comStatusOut_out(0, comStatus);
+            m_comStatusOwed.store(true, std::memory_order_relaxed);
         }
         m_transmitState = UspTransmitState::ENABLED;
         this->signalFirstStart();

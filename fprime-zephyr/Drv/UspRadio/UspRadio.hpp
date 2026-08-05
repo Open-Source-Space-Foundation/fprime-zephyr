@@ -224,6 +224,24 @@ class UspRadio final : public UspRadioComponentBase {
     //! Latched true after transmit is first enabled; gates radioFirstStart to a
     //! single emission per boot (mirrors Zephyr::LoRa::m_lora_ever_on).
     bool m_radioEverOn;
+
+    //! One-in-flight comStatus invariant.  The pinned Svc::ComQueue asserts if
+    //! it receives a comStatus while it is not in WAITING (i.e. a previously
+    //! emitted status has not yet been "spent" by ComQueue dequeuing and
+    //! sending us a frame).  True means we have emitted a comStatus that
+    //! dataIn_handler has not yet observed a frame for — i.e. it is NOT safe
+    //! to emit another one (ComQueue is presumed READY, not WAITING).
+    //! Cleared in dataIn_handler (a frame arriving proves ComQueue consumed
+    //! the outstanding status and is WAITING again); set on every
+    //! comStatusOut_out emission (priming or per-frame).  Guards the
+    //! DISABLED->ENABLED priming path so a repeat TRANSMIT ENABLED after a
+    //! deaf-recovery DISABLED/DISABLED cycle — with no frame ever consumed —
+    //! cannot double-prime into an already-READY ComQueue.
+    //! Atomic: written from dataIn_handler (caller thread, per the class
+    //! header's threading model) and from the component thread
+    //! (startRadio()/deferredTransmitCmd/deferredTxPacket) — same cross-thread
+    //! reasoning as m_pendingTxFrames.
+    std::atomic<bool> m_comStatusOwed;
 };
 
 }  // namespace Zephyr
