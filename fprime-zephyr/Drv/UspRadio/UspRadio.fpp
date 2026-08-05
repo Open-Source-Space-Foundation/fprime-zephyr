@@ -25,8 +25,13 @@ module Zephyr {
         @ Import the buffer allocation interface (allocate/deallocate)
         import Svc.BufferAllocation
 
-        @ Rate-group servicing: revert-deadline tick
-        sync input port run: Svc.Sched
+        @ Rate-group servicing: revert-deadline tick.  Async: a sync port
+        @ would run run_handler on the CALLING (rate-group) thread, but
+        @ run_handler does real RAL/SPI work (stopRadio/applyProfile/
+        @ startReceive) on a revert.  Async routes it through the component's
+        @ own message queue like every other RAL-touching handler in this
+        @ component, so all RAL/SPI access stays single-threaded.
+        async input port run: Svc.Sched
 
         @ Internal port - RX done (fires from USP callback; runs on component thread).
         @ Frame data (incl. rssi/snr) travels in the RX ring; this message only wakes the consumer.
