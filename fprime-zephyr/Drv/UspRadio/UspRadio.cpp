@@ -478,18 +478,21 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         this->log_WARNING_HI_InvalidProfile(profile);
         return;
     }
-    // Stop continuous RX before applying (RAC ALREADY_RUNNING guard — see
-    // deferredTxPacket).  On failure skip the apply: the policy already holds
-    // m_txProfile, and a later SET_TX_PROFILE retry applies it to hardware.
+    this->tlmWrite_TxProfile(profile);
+    // Do NOT apply the TX profile to the chip here: deferredTxPacket
+    // re-applies it fresh immediately before every transmitPacket() call
+    // (see there), so an eager apply here would only be overwritten by the
+    // rearmRx() below before it was ever used — three back-to-back chip
+    // reconfigurations (TX apply -> RX apply+start -> TX apply again) in
+    // the same handful of milliseconds reproduced the anomaly-B TX wedge on
+    // HWIL even with the per-TX re-apply fix in place. Just guarantee RX is
+    // (still) armed on its own profile — stop first (RAC ALREADY_RUNNING
+    // guard — see deferredTxPacket) — and let the next actual TX apply its
+    // own profile when it's actually needed.
     if (m_session->stopRadio() != 0) {
         this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::TX);
         return;
     }
-    (void)applyProfile(idx, UspRadioDirection::TX);
-    this->tlmWrite_TxProfile(profile);
-    // Re-arm continuous RX on the RX policy's profile — NOT the TX profile
-    // just applied above.  See rearmRx() for why a bare startReceive() here
-    // would leave the chip listening in TX modulation.
     (void)rearmRx();
 }
 
