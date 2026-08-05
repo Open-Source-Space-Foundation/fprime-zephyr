@@ -311,7 +311,18 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             txData = m_txScratch;
         }
 
-        int rc = m_session->transmitPacket(txData, txSize);
+        // Re-apply the TX profile's modulation immediately before every
+        // send.  SET_TX_PROFILE's own applyProfile() call is only an early
+        // validation apply — the chip is free to have been reconfigured for
+        // RX listening any time since then (RX must stay armed whenever the
+        // radio isn't actively transmitting, see rearmRx()).  This is the
+        // only point it's safe to assume the chip is actually in the TX
+        // profile's modulation for THIS frame; skipping it reproduces HWIL
+        // anomaly B (chip in the wrong mode when SetTx issues).
+        int rc = -1;  // sentinel "didn't transmit"; TxOutcomePolicy treats any nonzero rc alike
+        if (applyProfile(m_policy.txProfile(), UspRadioDirection::TX)) {
+            rc = m_session->transmitPacket(txData, txSize);
+        }
         // Decision extracted to TxOutcomePolicy::evaluate() (host-testable,
         // see its file header for the anomaly-B rationale) — same branches,
         // same outcomes as before the extraction, no behavior change.
