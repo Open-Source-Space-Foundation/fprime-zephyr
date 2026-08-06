@@ -129,7 +129,13 @@ class UspRadio final : public UspRadioComponentBase {
     //! @param idx profile index (must be valid).
     //! @param direction TX or RX (for event logging only).
     //! @returns true on success.
-    bool applyProfile(U8 idx, UspRadioDirection direction);
+    //! Apply a profile's modulation/packet params to the chip.
+    //! \param logChange emit ProfileChanged.  TRUE only for operator-visible
+    //!   profile *changes* (boot config, SET_{TX,RX}_PROFILE).  FALSE for the
+    //!   internal re-applies that happen on every TX and every RX re-arm —
+    //!   those fire per-frame, and at P0's 2.73 kbps two ACTIVITY_HI events
+    //!   per frame saturate the downlink and starve command acks.
+    bool applyProfile(U8 idx, UspRadioDirection direction, bool logChange);
 
     //! Re-apply the RX policy's profile to the chip and re-arm continuous
     //! receive.  MUST be used at every call site that (re-)arms listening —

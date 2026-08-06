@@ -67,10 +67,10 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
     }
 
     // Apply boot-default profile to the radio hardware
-    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::RX)) {
+    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::RX, true)) {
         return false;
     }
-    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::TX)) {
+    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::TX, true)) {
         return false;
     }
 
@@ -327,7 +327,7 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         // profile's modulation for THIS frame; skipping it reproduces HWIL
         // anomaly B (chip in the wrong mode when SetTx issues).
         int rc = -1;  // sentinel "didn't transmit"; TxOutcomePolicy treats any nonzero rc alike
-        if (applyProfile(m_policy.txProfile(), UspRadioDirection::TX)) {
+        if (applyProfile(m_policy.txProfile(), UspRadioDirection::TX, false)) {
             rc = m_session->transmitPacket(txData, txSize);
         }
         // Decision extracted to TxOutcomePolicy::evaluate() (host-testable,
@@ -492,6 +492,11 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         return;
     }
     this->tlmWrite_TxProfile(profile);
+    // Operator-visible confirmation of the change.  Emitted here rather than
+    // from applyProfile() because the chip apply is deferred to the next
+    // actual transmit (below), and because applyProfile() is now quiet on
+    // the per-frame paths.
+    this->log_ACTIVITY_HI_ProfileChanged(UspRadioDirection::TX, profile);
     // Do NOT apply the TX profile to the chip here: deferredTxPacket
     // re-applies it fresh immediately before every transmitPacket() call
     // (see there), so an eager apply here would only be overwritten by the
@@ -533,6 +538,9 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
         if (!rearmRx()) {
             return;
         }
+        // Operator-visible confirmation that the re-arm request took effect
+        // (rearmRx()'s own apply is quiet — see applyProfile).
+        this->log_ACTIVITY_HI_ProfileChanged(UspRadioDirection::RX, profile);
         // RX is now armed on an explicitly requested profile — supersedes any
         // pending revert hardware re-arm.
         m_revertRearmPending = false;
@@ -617,8 +625,12 @@ void UspRadio::SET_RX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq,
 // Helpers
 // ---------------------------------------------------------------------------
 
-bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction) {
+bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction, bool logChange) {
     if (idx >= LINK_PROFILE_COUNT) {
+        // Never fail silently: this is the one path that otherwise returns
+        // false with no event, which on the per-TX apply reads on the ground
+        // as "TX stopped for no reason" (BytesSent frozen, no diagnostics).
+        this->log_WARNING_HI_InvalidProfile(static_cast<LinkProfileId::T>(BOOT_DEFAULT_PROFILE));
         return false;
     }
     const LinkProfile& p = LINK_PROFILE_TABLE[idx];
@@ -627,13 +639,15 @@ bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction) {
         this->log_WARNING_HI_ConfigurationFailed(direction);
         return false;
     }
-    LinkProfileId profileId = static_cast<LinkProfileId::T>(idx);
-    this->log_ACTIVITY_HI_ProfileChanged(direction, profileId);
+    if (logChange) {
+        LinkProfileId profileId = static_cast<LinkProfileId::T>(idx);
+        this->log_ACTIVITY_HI_ProfileChanged(direction, profileId);
+    }
     return true;
 }
 
 bool UspRadio::rearmRx() {
-    if (!applyProfile(m_policy.rxProfile(), UspRadioDirection::RX)) {
+    if (!applyProfile(m_policy.rxProfile(), UspRadioDirection::RX, false)) {
         return false;  // ConfigurationFailed already logged by applyProfile
     }
     if (m_session->startReceive() != 0) {
