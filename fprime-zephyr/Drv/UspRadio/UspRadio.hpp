@@ -6,7 +6,9 @@
 //   - dataIn_handler: enqueues deferredTxPacket (component thread does TX)
 //   - USP RX callback: enqueues deferredRxDone (component thread handles RX)
 //   - TRANSMIT/CONTINUOUS_WAVE/SET_*_PROFILE commands: async → enqueued
-//   - run_handler: ticks ProfilePolicy for revert deadline
+//   - run_handler: async Svc.Sched input; ticks ProfilePolicy for revert
+//     deadline and, on revert, does the RAL/SPI re-arm — runs on the
+//     component thread via the queue, never on the rate-group caller thread
 //   - ALL RAL/SPI work runs on the component thread via RalSession methods
 //
 // Buffer ownership (matches LoRa.cpp / SBand.cpp contract):
@@ -61,7 +63,9 @@ class UspRadio final : public UspRadioComponentBase {
     // Port handlers
     // ----------------------------------------------------------------------
 
-    //! Rate-group tick: revert deadline poll
+    //! Rate-group tick: revert deadline poll.  Async port — runs on the
+    //! component thread (queued), not the rate-group caller thread, since
+    //! a revert does real RAL/SPI work (stopRadio/applyProfile/startReceive).
     void run_handler(FwIndexType portNum, U32 context) override;
 
     //! Incoming frame to transmit
@@ -125,7 +129,34 @@ class UspRadio final : public UspRadioComponentBase {
     //! @param idx profile index (must be valid).
     //! @param direction TX or RX (for event logging only).
     //! @returns true on success.
-    bool applyProfile(U8 idx, UspRadioDirection direction);
+    //! Apply a profile's modulation/packet params to the chip.
+    //! \param logChange emit ProfileChanged.  TRUE only for operator-visible
+    //!   profile *changes* (boot config, SET_{TX,RX}_PROFILE).  FALSE for the
+    //!   internal re-applies that happen on every TX and every RX re-arm —
+    //!   those fire per-frame, and at P0's 2.73 kbps two ACTIVITY_HI events
+    //!   per frame saturate the downlink and starve command acks.
+    bool applyProfile(U8 idx, UspRadioDirection direction, bool logChange);
+
+    //! Re-apply the RX policy's profile to the chip and re-arm continuous
+    //! receive.  MUST be used at every call site that (re-)arms listening —
+    //! never call m_session->startReceive() directly to resume RX.
+    //!
+    //! Why: applyProfile() reconfigures the chip's modulation/packet params
+    //! for whichever profile+direction was just passed; startReceive() (and
+    //! RalSessionImpl::onPreRx) only restores packet-length filtering,
+    //! assuming the chip is ALREADY on the right modulation.  A bare
+    //! startReceive() after a TX episode (which last applied the TX
+    //! profile) or after SET_TX_PROFILE (which applies the TX profile to
+    //! the chip) leaves the radio listening in TX modulation — silently
+    //! deaf whenever the TX and RX profiles differ (asymmetric links,
+    //! which this component advertises as a design goal).
+    //!
+    //! Caller must have already stopped the radio (stopRadio()) so the RAC
+    //! lock is free for applyProfile()/startReceive(); this only applies
+    //! the RX profile and re-arms.  Logs ConfigurationFailed on failure
+    //! (applyProfile logs its own failure; this logs startReceive's).
+    //! @returns true on success.
+    bool rearmRx();
 
     //! True when the RadioHead-compat shim applies for the given profile:
     //! the RADIOHEAD_COMPAT parameter is set AND the profile is LoRa (GFSK
@@ -199,6 +230,24 @@ class UspRadio final : public UspRadioComponentBase {
     //! Latched true after transmit is first enabled; gates radioFirstStart to a
     //! single emission per boot (mirrors Zephyr::LoRa::m_lora_ever_on).
     bool m_radioEverOn;
+
+    //! One-in-flight comStatus invariant.  The pinned Svc::ComQueue asserts if
+    //! it receives a comStatus while it is not in WAITING (i.e. a previously
+    //! emitted status has not yet been "spent" by ComQueue dequeuing and
+    //! sending us a frame).  True means we have emitted a comStatus that
+    //! dataIn_handler has not yet observed a frame for — i.e. it is NOT safe
+    //! to emit another one (ComQueue is presumed READY, not WAITING).
+    //! Cleared in dataIn_handler (a frame arriving proves ComQueue consumed
+    //! the outstanding status and is WAITING again); set on every
+    //! comStatusOut_out emission (priming or per-frame).  Guards the
+    //! DISABLED->ENABLED priming path so a repeat TRANSMIT ENABLED after a
+    //! deaf-recovery DISABLED/DISABLED cycle — with no frame ever consumed —
+    //! cannot double-prime into an already-READY ComQueue.
+    //! Atomic: written from dataIn_handler (caller thread, per the class
+    //! header's threading model) and from the component thread
+    //! (startRadio()/deferredTransmitCmd/deferredTxPacket) — same cross-thread
+    //! reasoning as m_pendingTxFrames.
+    std::atomic<bool> m_comStatusOwed;
 };
 
 }  // namespace Zephyr

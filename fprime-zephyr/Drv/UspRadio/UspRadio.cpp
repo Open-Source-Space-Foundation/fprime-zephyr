@@ -39,7 +39,8 @@ UspRadio::UspRadio(const char* compName)
       m_bytesReceived(0),
       m_rxReverts(0),
       m_revertRearmPending(false),
-      m_radioEverOn(false) {}
+      m_radioEverOn(false),
+      m_comStatusOwed(false) {}
 
 UspRadio::~UspRadio() {}
 
@@ -66,10 +67,10 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
     }
 
     // Apply boot-default profile to the radio hardware
-    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::RX)) {
+    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::RX, true)) {
         return false;
     }
-    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::TX)) {
+    if (!applyProfile(BOOT_DEFAULT_PROFILE, UspRadioDirection::TX, true)) {
         return false;
     }
 
@@ -78,10 +79,15 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
         return false;
     }
 
-    // If initially enabled, kick off the ping-pong comStatus protocol
-    if (initialTransmitState == UspTransmitState::ENABLED) {
+    // If initially enabled, kick off the ping-pong comStatus protocol.
+    // Guard with m_comStatusOwed for defense-in-depth (startRadio() only runs
+    // once, before any frame could have primed it, so this should always be
+    // false here) — see m_comStatusOwed for the one-in-flight invariant.
+    if ((initialTransmitState == UspTransmitState::ENABLED) &&
+        !m_comStatusOwed.load(std::memory_order_relaxed)) {
         Fw::Success status = Fw::Success::SUCCESS;
         this->comStatusOut_out(0, status);
+        m_comStatusOwed.store(true, std::memory_order_relaxed);
         this->signalFirstStart();
     }
 
@@ -160,12 +166,8 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
             this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
             return;
         }
-        if (!applyProfile(m_policy.rxProfile(), UspRadioDirection::RX)) {
-            return;  // ConfigurationFailed logged by applyProfile; retry next tick
-        }
-        if (m_session->startReceive() != 0) {
-            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-            return;  // retry next tick
+        if (!rearmRx()) {
+            return;  // ConfigurationFailed already logged; retry next tick
         }
         m_revertRearmPending = false;
     }
@@ -181,6 +183,12 @@ void UspRadio::dataIn_handler(FwIndexType /*portNum*/,
     // Count before enqueue: deferredTxPacket sees >0 while more frames are
     // in flight and skips the per-frame RX re-arm (see m_pendingTxFrames).
     m_pendingTxFrames.fetch_add(1, std::memory_order_relaxed);
+    // A frame arriving here proves Svc::ComQueue dequeued and sent it, which
+    // only happens after it consumed our last outstanding comStatus (i.e. it
+    // was READY and is now WAITING again).  Clear the debt so the next
+    // comStatusOut_out (emitted at the end of deferredTxPacket, on the
+    // component thread) is known-safe.  See m_comStatusOwed.
+    m_comStatusOwed.store(false, std::memory_order_relaxed);
     this->deferredTxPacket_internalInterfaceInvoke(data, context);
 }
 
@@ -269,7 +277,14 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
     m_pendingTxFrames.fetch_sub(1, std::memory_order_relaxed);
 
     Fw::Buffer mutableData = data;  // cast away const for dataReturnOut
-    Fw::Success returnStatus = Fw::Success::FAILURE;
+    // Default SUCCESS, not FAILURE.  Svc::ComQueue parks in WAITING on a
+    // FAILURE comStatus and nothing ever re-triggers processQueue, so a
+    // FAILURE here permanently mutes the downlink — the same anomaly-B latch
+    // TxOutcomePolicy exists to prevent on the ENABLED path (see its header).
+    // The DISABLING/DISABLED paths below drop the frame without transmitting,
+    // but the pipeline must stay alive either way: "ready for the next frame"
+    // is about queue liveness, not about whether this frame reached the air.
+    Fw::Success returnStatus = Fw::Success::SUCCESS;
 
     if (m_transmitState == UspTransmitState::ENABLED) {
         // RadioHead-compat shim (see RadioHeadShim.hpp): legacy peers expect a
@@ -303,7 +318,18 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
             txData = m_txScratch;
         }
 
-        int rc = m_session->transmitPacket(txData, txSize);
+        // Re-apply the TX profile's modulation immediately before every
+        // send.  SET_TX_PROFILE's own applyProfile() call is only an early
+        // validation apply — the chip is free to have been reconfigured for
+        // RX listening any time since then (RX must stay armed whenever the
+        // radio isn't actively transmitting, see rearmRx()).  This is the
+        // only point it's safe to assume the chip is actually in the TX
+        // profile's modulation for THIS frame; skipping it reproduces HWIL
+        // anomaly B (chip in the wrong mode when SetTx issues).
+        int rc = -1;  // sentinel "didn't transmit"; TxOutcomePolicy treats any nonzero rc alike
+        if (applyProfile(m_policy.txProfile(), UspRadioDirection::TX, false)) {
+            rc = m_session->transmitPacket(txData, txSize);
+        }
         // Decision extracted to TxOutcomePolicy::evaluate() (host-testable,
         // see its file header for the anomaly-B rationale) — same branches,
         // same outcomes as before the extraction, no behavior change.
@@ -337,13 +363,27 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         // TX episode over — guarantee continuous RX is armed or the board
         // stays deaf after TRANSMIT DISABLED.  Stop first: if the last frame's
         // re-arm succeeded, a bare startReceive() would fail ALREADY_RUNNING.
-        if ((m_session->stopRadio() != 0) || (m_session->startReceive() != 0)) {
+        if (m_session->stopRadio() != 0) {
             this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        } else {
+            (void)rearmRx();
         }
     }
 
     this->dataReturnOut_out(0, mutableData, context);
+    // dataIn_handler cleared m_comStatusOwed when this frame arrived (it
+    // proved ComQueue consumed the prior status and is WAITING again), so
+    // this emission is always the one status ComQueue expects per frame and
+    // needs no guard.  See m_comStatusOwed.
     this->comStatusOut_out(0, returnStatus);
+    // Only a SUCCESS leaves ComQueue READY (i.e. genuinely "owed nothing").
+    // A FAILURE parks it in WAITING, where a later priming SUCCESS is the
+    // only thing that can revive the downlink — so never record a debt for
+    // one, or the guard in deferredTransmitCmd would suppress exactly the
+    // emission that recovers a parked queue (permanent mute).  returnStatus
+    // is SUCCESS on every path today; this keeps the invariant honest if a
+    // future path reintroduces FAILURE.
+    m_comStatusOwed.store(returnStatus.e == Fw::Success::SUCCESS, std::memory_order_relaxed);
 
     if (m_rearmAfterTx) {
         m_rearmAfterTx = false;
@@ -359,9 +399,9 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         }
 #endif
         if (m_pendingTxFrames.load(std::memory_order_relaxed) == 0) {
-            if (m_session->startReceive() != 0) {
-                this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-            }
+            // Re-apply the RX profile before arming — the chip was last
+            // configured for TX modulation just above (transmitPacket()).
+            (void)rearmRx();
         }
     }
 }
@@ -403,9 +443,19 @@ void UspRadio::signalFirstStart() {
 
 void UspRadio::deferredTransmitCmd_internalInterfaceHandler(const UspTransmitState& enabled) {
     if (enabled == UspTransmitState::ENABLED) {
-        if (m_transmitState == UspTransmitState::DISABLED) {
+        // Only prime ComQueue's pipeline if no comStatus is currently
+        // outstanding (ComQueue is WAITING).  Without this guard, a
+        // DISABLED->ENABLED transition after a deaf-recovery
+        // DISABLED/DISABLED cycle (repeat TRANSMIT DISABLED, a documented
+        // operator lever elsewhere in this handler) with no frame ever
+        // consumed in between would emit a second SUCCESS into an
+        // already-READY ComQueue, which is an FW_ASSERT/crash-loop bug in
+        // the pinned Svc::ComQueue.  See m_comStatusOwed.
+        if ((m_transmitState == UspTransmitState::DISABLED) &&
+            !m_comStatusOwed.load(std::memory_order_relaxed)) {
             Fw::Success comStatus = Fw::Success::SUCCESS;
             this->comStatusOut_out(0, comStatus);
+            m_comStatusOwed.store(true, std::memory_order_relaxed);
         }
         m_transmitState = UspTransmitState::ENABLED;
         this->signalFirstStart();
@@ -421,8 +471,10 @@ void UspRadio::deferredTransmitCmd_internalInterfaceHandler(const UspTransmitSta
             // recover-RX lever (repeat TRANSMIT DISABLED), since a
             // same-profile SET_RX_PROFILE is a kNoOp and does not re-arm.
             m_transmitState = UspTransmitState::DISABLED;
-            if ((m_session->stopRadio() != 0) || (m_session->startReceive() != 0)) {
+            if (m_session->stopRadio() != 0) {
                 this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+            } else {
+                (void)rearmRx();
             }
         }
     }
@@ -439,19 +491,27 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
         this->log_WARNING_HI_InvalidProfile(profile);
         return;
     }
-    // Stop continuous RX before applying (RAC ALREADY_RUNNING guard — see
-    // deferredTxPacket).  On failure skip the apply: the policy already holds
-    // m_txProfile, and a later SET_TX_PROFILE retry applies it to hardware.
+    this->tlmWrite_TxProfile(profile);
+    // Operator-visible confirmation of the change.  Emitted here rather than
+    // from applyProfile() because the chip apply is deferred to the next
+    // actual transmit (below), and because applyProfile() is now quiet on
+    // the per-frame paths.
+    this->log_ACTIVITY_HI_ProfileChanged(UspRadioDirection::TX, profile);
+    // Do NOT apply the TX profile to the chip here: deferredTxPacket
+    // re-applies it fresh immediately before every transmitPacket() call
+    // (see there), so an eager apply here would only be overwritten by the
+    // rearmRx() below before it was ever used — three back-to-back chip
+    // reconfigurations (TX apply -> RX apply+start -> TX apply again) in
+    // the same handful of milliseconds reproduced the anomaly-B TX wedge on
+    // HWIL even with the per-TX re-apply fix in place. Just guarantee RX is
+    // (still) armed on its own profile — stop first (RAC ALREADY_RUNNING
+    // guard — see deferredTxPacket) — and let the next actual TX apply its
+    // own profile when it's actually needed.
     if (m_session->stopRadio() != 0) {
         this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::TX);
         return;
     }
-    (void)applyProfile(idx, UspRadioDirection::TX);
-    // Re-arm continuous RX — otherwise the radio is left deaf in standby.
-    if (m_session->startReceive() != 0) {
-        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-    }
-    this->tlmWrite_TxProfile(profile);
+    (void)rearmRx();
 }
 
 // ---------------------------------------------------------------------------
@@ -475,11 +535,12 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
             this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
             return;
         }
-        (void)applyProfile(idx, UspRadioDirection::RX);
-        if (m_session->startReceive() != 0) {
-            this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        if (!rearmRx()) {
             return;
         }
+        // Operator-visible confirmation that the re-arm request took effect
+        // (rearmRx()'s own apply is quiet — see applyProfile).
+        this->log_ACTIVITY_HI_ProfileChanged(UspRadioDirection::RX, profile);
         // RX is now armed on an explicitly requested profile — supersedes any
         // pending revert hardware re-arm.
         m_revertRearmPending = false;
@@ -493,12 +554,7 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
         this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
         return;
     }
-    if (!applyProfile(idx, UspRadioDirection::RX)) {
-        return;
-    }
-    if (m_session->startReceive() != 0) {
-        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-    } else {
+    if (rearmRx()) {
         // RX is now armed on an explicitly requested profile — supersedes any
         // pending revert hardware re-arm.
         m_revertRearmPending = false;
@@ -537,11 +593,7 @@ void UspRadio::deferredContinuousWave_internalInterfaceHandler(U16 seconds) {
     (void)m_session->stopRadio();
 
     // Re-apply current RX profile and restart receive
-    U8 rxIdx = m_policy.rxProfile();
-    (void)applyProfile(rxIdx, UspRadioDirection::RX);
-    if (m_session->startReceive() != 0) {
-        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
-    }
+    (void)rearmRx();
 }
 
 // ---------------------------------------------------------------------------
@@ -573,8 +625,12 @@ void UspRadio::SET_RX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq,
 // Helpers
 // ---------------------------------------------------------------------------
 
-bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction) {
+bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction, bool logChange) {
     if (idx >= LINK_PROFILE_COUNT) {
+        // Never fail silently: this is the one path that otherwise returns
+        // false with no event, which on the per-TX apply reads on the ground
+        // as "TX stopped for no reason" (BytesSent frozen, no diagnostics).
+        this->log_WARNING_HI_InvalidProfile(static_cast<LinkProfileId::T>(BOOT_DEFAULT_PROFILE));
         return false;
     }
     const LinkProfile& p = LINK_PROFILE_TABLE[idx];
@@ -583,8 +639,24 @@ bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction) {
         this->log_WARNING_HI_ConfigurationFailed(direction);
         return false;
     }
-    LinkProfileId profileId = static_cast<LinkProfileId::T>(idx);
-    this->log_ACTIVITY_HI_ProfileChanged(direction, profileId);
+    if (logChange) {
+        LinkProfileId profileId = static_cast<LinkProfileId::T>(idx);
+        this->log_ACTIVITY_HI_ProfileChanged(direction, profileId);
+    }
+    return true;
+}
+
+bool UspRadio::rearmRx() {
+    // armedRxProfile(), NOT rxProfile(): while a SET_RX_PROFILE is awaiting
+    // confirmation the chip must listen on the PENDING profile, or no frame
+    // can ever arrive to confirm it (see ProfilePolicy::armedRxProfile).
+    if (!applyProfile(m_policy.armedRxProfile(), UspRadioDirection::RX, false)) {
+        return false;  // ConfigurationFailed already logged by applyProfile
+    }
+    if (m_session->startReceive() != 0) {
+        this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+        return false;
+    }
     return true;
 }
 
