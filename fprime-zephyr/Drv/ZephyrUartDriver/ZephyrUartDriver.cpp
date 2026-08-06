@@ -10,6 +10,9 @@
 #include "Fw/Types/Assert.hpp"
 #include <Fw/FPrimeBasicTypes.hpp>
 
+// PROTOTYPE uplink latency tracing (see ReferenceDeploymentTopology.cpp)
+extern "C" void uplink_trace(unsigned char st, unsigned short a);
+
 namespace Zephyr {
 
     // ----------------------------------------------------------------------
@@ -57,6 +60,16 @@ namespace Zephyr {
         uart_irq_rx_enable(this->m_dev);
 	    uart_irq_tx_disable(this->m_dev);
 
+        // PROTOTYPE (uplink latency): event-driven RX drain thread, woken by
+        // the RX ISR instead of waiting on the 10Hz schedIn tick.
+        k_sem_init(&this->m_rx_sem, 0, 1);
+        k_mutex_init(&this->m_drain_mutex);
+        k_thread_create(&this->m_drain_thread, this->m_drain_stack,
+                        K_KERNEL_STACK_SIZEOF(this->m_drain_stack),
+                        ZephyrUartDriver::drainThreadEntry, this, nullptr, nullptr,
+                        K_PRIO_PREEMPT(6), 0, K_NO_WAIT);
+        k_thread_name_set(&this->m_drain_thread, "uart_rx_drain");
+
         if (this->isConnected_ready_OutputPort(0)) {
             this->ready_out(0);
         }
@@ -86,16 +99,22 @@ namespace Zephyr {
         // silently corrupted uplinks. schedIn_handler re-enables RX once it has
         // freed ring space.
         U8 c;
+        unsigned short trace_n = 0;
         while (ring_buf_space_get(&self->m_ring_buf) > 0) {
             if (uart_fifo_read(dev, &c, 1) != 1) {
                 break;  // Hardware FIFO drained; nothing more to read right now.
             }
+            trace_n++;
             // Space was just confirmed above, so this put cannot fail -- but
             // keep the old counting path too as a should-never-fire-now
             // tripwire in case of a future regression.
             if (ring_buf_put(&self->m_ring_buf, &c, 1) != 1) {
                 atomic_inc(&self->m_rx_overrun_count);
             }
+        }
+        if (trace_n > 0) {
+            uplink_trace(28, trace_n);  // PROTOTYPE: RX bytes landed in ring (ISR)
+            k_sem_give(&self->m_rx_sem);  // PROTOTYPE: wake drain thread now
         }
         if (ring_buf_space_get(&self->m_ring_buf) == 0) {
             uart_irq_rx_disable(dev);
@@ -107,12 +126,39 @@ namespace Zephyr {
     // Handler implementations for user-defined typed input ports
     // ----------------------------------------------------------------------
 
+    // PROTOTYPE (uplink latency): dedicated drain thread. Blocks on m_rx_sem,
+    // drains as soon as the ISR signals bytes have landed. The downstream
+    // deframe chain (frameAccumulator -> tcDeframer -> tcSecurityDeframer ->
+    // spacePacketDeframer) runs synchronously in this thread's context up to
+    // the router's queue, hence the generous stack (SD-card seq-num write via
+    // FatFs happens down this call path).
+    void ZephyrUartDriver::drainThreadEntry(void* p1, void* p2, void* p3) {
+        ZephyrUartDriver* self = reinterpret_cast<ZephyrUartDriver*>(p1);
+        for (;;) {
+            k_sem_take(&self->m_rx_sem, K_FOREVER);
+            uplink_trace(33, 0);  // PROTOTYPE: drain thread woke
+            self->drainRing();
+            uplink_trace(34, 0);  // PROTOTYPE: drain thread completed pass
+        }
+    }
+
     void ZephyrUartDriver ::
         schedIn_handler(
             const FwIndexType portNum,
             U32 context
         )
     {
+        this->drainRing();
+        this->reportRxOverrunsIfAny();
+    }
+
+    void ZephyrUartDriver::drainRing()
+    {
+        // Bounded wait: if the drain thread is wedged (fault, SD stall), the
+        // 10Hz rate group must NOT block behind it -- skip this tick instead.
+        if (k_mutex_lock(&this->m_drain_mutex, K_MSEC(20)) != 0) {
+            return;
+        }
         // issue #457: drain the ring buffer in a loop instead of taking a single
         // SERIAL_BUFFER_SIZE-sized bite per tick. Previously, if the ISR filled
         // the ring buffer faster than one bite per tick could drain it (e.g. a
@@ -133,6 +179,7 @@ namespace Zephyr {
                 break;
             }
             recv_buffer.setSize(recv_size);
+            uplink_trace(29, static_cast<unsigned short>(recv_size));  // PROTOTYPE: schedIn drain
             recv_out(0, recv_buffer, Drv::ByteStreamStatus::OP_OK);
         }
 
@@ -146,8 +193,7 @@ namespace Zephyr {
             this->m_rx_paused = false;
             uart_irq_rx_enable(this->m_dev);
         }
-
-        this->reportRxOverrunsIfAny();
+        k_mutex_unlock(&this->m_drain_mutex);
     }
 
     void ZephyrUartDriver::reportRxOverrunsIfAny() {
@@ -172,9 +218,11 @@ namespace Zephyr {
             Fw::Buffer &sendBuffer
         )
     {
+        uplink_trace(37, static_cast<unsigned short>(sendBuffer.getSize()));  // PROTOTYPE: TX poll loop entry
         for (U32 i = 0; i < sendBuffer.getSize(); i++) {
             uart_poll_out(this->m_dev, sendBuffer.getData()[i]);
         }
+        uplink_trace(38, static_cast<unsigned short>(sendBuffer.getSize()));  // PROTOTYPE: TX poll loop exit
         return Drv::ByteStreamStatus::OP_OK;
     }
 

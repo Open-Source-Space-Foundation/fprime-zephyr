@@ -125,6 +125,20 @@ namespace Zephyr {
         // no read-modify-write race -- a plain volatile bool is sufficient
         // (no atomic needed for a single-writer-per-direction flag like this).
         volatile bool m_rx_paused;
+
+        // PROTOTYPE (uplink latency): event-driven RX drain. The RX ISR gives
+        // m_rx_sem; m_drain_thread wakes and drains the ring immediately
+        // instead of waiting for the next 10Hz schedIn tick (measured ~50ms
+        // median / ~95ms worst-case added latency per uplink frame).
+        // schedIn_handler still runs as a fallback drain; m_drain_mutex
+        // serializes the two so the downstream passive deframe chain is never
+        // entered concurrently.
+        struct k_sem m_rx_sem;
+        struct k_mutex m_drain_mutex;
+        struct k_thread m_drain_thread;
+        K_KERNEL_STACK_MEMBER(m_drain_stack, 8192);
+        static void drainThreadEntry(void* p1, void* p2, void* p3);
+        void drainRing();
     };
 
 } // end namespace Zephyr
