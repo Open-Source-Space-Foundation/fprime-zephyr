@@ -84,6 +84,19 @@ class ProfilePolicy {
     //!< pending before the revert — valid to read as "from" in ProfileReverted).
     U8 pendingRxProfile() const { return m_pendingRxProfile; }
     bool hasPendingRx() const { return m_hasPendingRx; }
+
+    //! The profile the RX hardware should currently be listening on.
+    //!
+    //! This is the pending candidate while one is awaiting confirmation, and
+    //! the committed profile otherwise.  It is NOT rxProfile(): a pending
+    //! change is confirmed by receiving a frame on the NEW profile, so the
+    //! radio has to actually be armed on it — arming the committed profile
+    //! instead makes confirmation impossible (no frame can ever arrive on a
+    //! profile the chip isn't listening to), so the change silently never
+    //! takes effect and the revert deadline always expires.
+    //! Use this for every hardware RX arm; use rxProfile() only to report
+    //! what is confirmed.
+    U8 armedRxProfile() const { return m_hasPendingRx ? m_pendingRxProfile : m_rxProfile; }
     U32 revertCount()   const { return m_revertCount; }
 
   private:

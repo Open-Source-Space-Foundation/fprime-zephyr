@@ -647,7 +647,10 @@ bool UspRadio::applyProfile(U8 idx, UspRadioDirection direction, bool logChange)
 }
 
 bool UspRadio::rearmRx() {
-    if (!applyProfile(m_policy.rxProfile(), UspRadioDirection::RX, false)) {
+    // armedRxProfile(), NOT rxProfile(): while a SET_RX_PROFILE is awaiting
+    // confirmation the chip must listen on the PENDING profile, or no frame
+    // can ever arrive to confirm it (see ProfilePolicy::armedRxProfile).
+    if (!applyProfile(m_policy.armedRxProfile(), UspRadioDirection::RX, false)) {
         return false;  // ConfigurationFailed already logged by applyProfile
     }
     if (m_session->startReceive() != 0) {
