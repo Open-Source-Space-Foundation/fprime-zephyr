@@ -277,7 +277,14 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
     m_pendingTxFrames.fetch_sub(1, std::memory_order_relaxed);
 
     Fw::Buffer mutableData = data;  // cast away const for dataReturnOut
-    Fw::Success returnStatus = Fw::Success::FAILURE;
+    // Default SUCCESS, not FAILURE.  Svc::ComQueue parks in WAITING on a
+    // FAILURE comStatus and nothing ever re-triggers processQueue, so a
+    // FAILURE here permanently mutes the downlink — the same anomaly-B latch
+    // TxOutcomePolicy exists to prevent on the ENABLED path (see its header).
+    // The DISABLING/DISABLED paths below drop the frame without transmitting,
+    // but the pipeline must stay alive either way: "ready for the next frame"
+    // is about queue liveness, not about whether this frame reached the air.
+    Fw::Success returnStatus = Fw::Success::SUCCESS;
 
     if (m_transmitState == UspTransmitState::ENABLED) {
         // RadioHead-compat shim (see RadioHeadShim.hpp): legacy peers expect a
@@ -366,11 +373,17 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
     this->dataReturnOut_out(0, mutableData, context);
     // dataIn_handler cleared m_comStatusOwed when this frame arrived (it
     // proved ComQueue consumed the prior status and is WAITING again), so
-    // this emission is always the one status ComQueue expects per frame —
-    // no guard needed, just re-mark the debt so the next priming/attempt
-    // knows a status is now outstanding.  See m_comStatusOwed.
+    // this emission is always the one status ComQueue expects per frame and
+    // needs no guard.  See m_comStatusOwed.
     this->comStatusOut_out(0, returnStatus);
-    m_comStatusOwed.store(true, std::memory_order_relaxed);
+    // Only a SUCCESS leaves ComQueue READY (i.e. genuinely "owed nothing").
+    // A FAILURE parks it in WAITING, where a later priming SUCCESS is the
+    // only thing that can revive the downlink — so never record a debt for
+    // one, or the guard in deferredTransmitCmd would suppress exactly the
+    // emission that recovers a parked queue (permanent mute).  returnStatus
+    // is SUCCESS on every path today; this keeps the invariant honest if a
+    // future path reintroduces FAILURE.
+    m_comStatusOwed.store(returnStatus.e == Fw::Success::SUCCESS, std::memory_order_relaxed);
 
     if (m_rearmAfterTx) {
         m_rearmAfterTx = false;
