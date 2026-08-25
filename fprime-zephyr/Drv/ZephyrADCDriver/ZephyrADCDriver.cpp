@@ -115,7 +115,7 @@ void ZephyrADCDriver::publishReading() {
 
 void ZephyrADCDriver ::ENABLE_ADC_Schedule_cmdHandler(FwOpcodeType opCode,
                                                       U32 cmdSeq,
-                                                      Zephyr::ZephyrADCPollOperation enable) {
+                                                      const Zephyr::ZephyrADCPollOperation& enable) {
 
     const U8 state = static_cast<U8>(enable);
     if (this->m_adc_enabled.exchange(state) != state) {
