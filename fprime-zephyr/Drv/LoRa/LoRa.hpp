@@ -86,7 +86,7 @@ class LoRa final : public LoRaComponentBase {
     //! Start/stop transmission on the LoRa module
     void TRANSMIT_cmdHandler(FwOpcodeType opCode,  //!< The opcode
                              U32 cmdSeq,           //!< The command sequence number
-                             TransmitState enabled) override;
+                             const TransmitState& enabled) override;
 
     //! Set the transmit state of the LoRa component
     //! Used by the TRANSMIT command and the enable/disable transmit port handlers
