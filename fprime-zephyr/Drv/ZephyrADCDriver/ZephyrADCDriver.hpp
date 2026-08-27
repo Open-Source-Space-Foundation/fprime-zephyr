@@ -91,7 +91,7 @@ class ZephyrADCDriver final : public ZephyrADCDriverComponentBase {
     void ENABLE_ADC_Schedule_cmdHandler(
         FwOpcodeType opCode,                 //!< The opcode
         U32 cmdSeq,                          //!< The command sequence number
-        Zephyr::ZephyrADCPollOperation enable  //!< Indicates whether the ADC is enabled or disabled
+        const Zephyr::ZephyrADCPollOperation& enable  //!< Indicates whether the ADC is enabled or disabled
         ) override;   
 };
 
