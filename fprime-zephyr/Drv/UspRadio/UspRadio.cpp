@@ -5,12 +5,13 @@
 // ======================================================================
 
 #include "fprime-zephyr/Drv/UspRadio/UspRadio.hpp"
-#include "fprime-zephyr/Drv/UspRadio/LinkProfiles.hpp"
-#include "fprime-zephyr/Drv/UspRadio/RadioHeadShim.hpp"
-#include "fprime-zephyr/Drv/UspRadio/TxOutcomePolicy.hpp"
 
 #include <Fw/Logger/Logger.hpp>
 #include <cstring>
+
+#include "fprime-zephyr/Drv/UspRadio/LinkProfiles.hpp"
+#include "fprime-zephyr/Drv/UspRadio/RadioHeadShim.hpp"
+#include "fprime-zephyr/Drv/UspRadio/TxOutcomePolicy.hpp"
 
 #ifdef __ZEPHYR__
 #include <zephyr/kernel.h>
@@ -55,10 +56,9 @@ bool UspRadio::startRadio(UspTransmitState initialTransmitState) {
     m_transmitState = initialTransmitState;
 
     // Register RX callback (fires on USP thread → posts internal msg)
-    m_session->setCallbacks(
-        [this](const uint8_t* data, std::size_t size, int16_t rssi, int8_t snr) {
-            this->onRxDone(data, size, rssi, snr);
-        });
+    m_session->setCallbacks([this](const uint8_t* data, std::size_t size, int16_t rssi, int8_t snr) {
+        this->onRxDone(data, size, rssi, snr);
+    });
 
     if (m_session->init() != 0) {
         Fw::Logger::log("[UspRadio] session.init() failed\n");
@@ -116,12 +116,11 @@ void UspRadio::onRxDone(const uint8_t* data, std::size_t size, int16_t rssi, int
     }
 
     RxSlot& slot = m_rxRing[head % RX_RING_DEPTH];
-    const FwSizeType safeSize =
-        (size > RX_SCRATCH_SIZE) ? RX_SCRATCH_SIZE : static_cast<FwSizeType>(size);
+    const FwSizeType safeSize = (size > RX_SCRATCH_SIZE) ? RX_SCRATCH_SIZE : static_cast<FwSizeType>(size);
     (void)::memcpy(slot.data, data, safeSize);
-    slot.len  = safeSize;
+    slot.len = safeSize;
     slot.rssi = rssi;
-    slot.snr  = snr;
+    slot.snr = snr;
     // Publish the slot before the message can be consumed.
     m_rxHead.store(head + 1, std::memory_order_release);
 
@@ -137,12 +136,11 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
     ProfilePolicy::Action action = m_policy.tick(nowMs());
     if (action == ProfilePolicy::Action::kRevert) {
         U8 fromProfile = m_policy.pendingRxProfile();  // saved "from" before revert
-        U8 toProfile   = m_policy.rxProfile();
+        U8 toProfile = m_policy.rxProfile();
 
         ++m_rxReverts;
-        this->log_WARNING_LO_ProfileReverted(
-            static_cast<LinkProfileId::T>(fromProfile),
-            static_cast<LinkProfileId::T>(toProfile));
+        this->log_WARNING_LO_ProfileReverted(static_cast<LinkProfileId::T>(fromProfile),
+                                             static_cast<LinkProfileId::T>(toProfile));
         this->tlmWrite_RxReverts(m_rxReverts);
         this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(toProfile));
 
@@ -175,9 +173,7 @@ void UspRadio::run_handler(FwIndexType /*portNum*/, U32 /*context*/) {
 // dataIn_handler — enqueue TX (component thread does the work)
 // ---------------------------------------------------------------------------
 
-void UspRadio::dataIn_handler(FwIndexType /*portNum*/,
-                               Fw::Buffer& data,
-                               const ComCfg::FrameContext& context) {
+void UspRadio::dataIn_handler(FwIndexType /*portNum*/, Fw::Buffer& data, const ComCfg::FrameContext& context) {
     // Count before enqueue: deferredTxPacket sees >0 while more frames are
     // in flight and skips the per-frame RX re-arm (see m_pendingTxFrames).
     m_pendingTxFrames.fetch_add(1, std::memory_order_relaxed);
@@ -208,13 +204,12 @@ void UspRadio::deferredRxDone_internalInterfaceHandler() {
     // Notify ProfilePolicy that a frame was received
     ProfilePolicy::Action action = m_policy.frameReceived();
     if (action == ProfilePolicy::Action::kConfirmRx) {
-        this->log_ACTIVITY_LO_ProfileConfirmed(
-            static_cast<LinkProfileId::T>(m_policy.rxProfile()));
+        this->log_ACTIVITY_LO_ProfileConfirmed(static_cast<LinkProfileId::T>(m_policy.rxProfile()));
         this->tlmWrite_RxProfile(static_cast<LinkProfileId::T>(m_policy.rxProfile()));
     }
 
     m_rxRssi = slot.rssi;
-    m_rxSnr  = slot.snr;
+    m_rxSnr = slot.snr;
 
     // Locate the deliverable payload within the on-air packet.  In
     // RadioHead-compat mode the first 4 bytes are the peer's RadioHead
@@ -224,8 +219,7 @@ void UspRadio::deferredRxDone_internalInterfaceHandler() {
     const bool rhCompat = this->radioHeadCompatFor(m_policy.rxProfile());
     U32 payloadOffset = 0;
     U32 payloadLen = 0;
-    if (RadioHeadShim::locateRxPayload(static_cast<U32>(slot.len), rhCompat,
-                                       payloadOffset, payloadLen)) {
+    if (RadioHeadShim::locateRxPayload(static_cast<U32>(slot.len), rhCompat, payloadOffset, payloadLen)) {
         // Allocate and dispatch the received frame
         const FwSizeType payloadSize = static_cast<FwSizeType>(payloadLen);
         Fw::Buffer buffer = this->allocate_out(0, payloadSize);
@@ -263,8 +257,7 @@ void UspRadio::deferredRxDone_internalInterfaceHandler() {
 // deferredTxPacket — component thread
 // ---------------------------------------------------------------------------
 
-void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
-                                                          const ComCfg::FrameContext& context) {
+void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data, const ComCfg::FrameContext& context) {
     // This frame is now being processed — no longer pending.
     m_pendingTxFrames.fetch_sub(1, std::memory_order_relaxed);
 
@@ -276,8 +269,8 @@ void UspRadio::deferredTxPacket_internalInterfaceHandler(const Fw::Buffer& data,
         // 4-byte header on every LoRa frame; it consumes on-air budget, so the
         // payload cap shrinks accordingly (252 → 248 = TmFrameFixedSize).
         const bool rhCompat = this->radioHeadCompatFor(m_policy.txProfile());
-        const FwSizeType maxPayload = static_cast<FwSizeType>(
-            RadioHeadShim::maxPayload(static_cast<U32>(MAX_PACKET_SIZE), rhCompat));
+        const FwSizeType maxPayload =
+            static_cast<FwSizeType>(RadioHeadShim::maxPayload(static_cast<U32>(MAX_PACKET_SIZE), rhCompat));
         FwSizeType size = data.getSize();
         if (size > maxPayload) {
             size = maxPayload;  // truncate
@@ -458,8 +451,7 @@ void UspRadio::deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId
 // deferredSetRxProfile — component thread
 // ---------------------------------------------------------------------------
 
-void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId& profile,
-                                                              U16 revert_s) {
+void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId& profile, U16 revert_s) {
     U8 idx = static_cast<U8>(profile.e);
     ProfilePolicy::Action action = m_policy.setRxProfile(idx, revert_s, nowMs());
     if (action == ProfilePolicy::Action::kInvalidIndex) {
@@ -548,7 +540,7 @@ void UspRadio::deferredContinuousWave_internalInterfaceHandler(U16 seconds) {
 // Command handlers (async → deferred)
 // ---------------------------------------------------------------------------
 
-void UspRadio::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, UspTransmitState enabled) {
+void UspRadio::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, const UspTransmitState& enabled) {
     this->deferredTransmitCmd_internalInterfaceInvoke(enabled);
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
@@ -558,13 +550,12 @@ void UspRadio::CONTINUOUS_WAVE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, U16 s
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
 
-void UspRadio::SET_TX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, LinkProfileId profile) {
+void UspRadio::SET_TX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, const LinkProfileId& profile) {
     this->deferredSetTxProfile_internalInterfaceInvoke(profile);
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
 
-void UspRadio::SET_RX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq,
-                                          LinkProfileId profile, U16 revert_s) {
+void UspRadio::SET_RX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, const LinkProfileId& profile, U16 revert_s) {
     this->deferredSetRxProfile_internalInterfaceInvoke(profile, revert_s);
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
@@ -592,8 +583,7 @@ bool UspRadio::radioHeadCompatFor(U8 profileIdx) {
     // The RadioHead header is a LoRa-ecosystem convention (RadioHead /
     // adafruit_rfm9x / legacy Zephyr::LoRa); GFSK profiles are USP-only
     // links and are always raw regardless of the parameter.
-    if ((profileIdx >= LINK_PROFILE_COUNT) ||
-        (LINK_PROFILE_TABLE[profileIdx].mod != ModKind::LORA)) {
+    if ((profileIdx >= LINK_PROFILE_COUNT) || (LINK_PROFILE_TABLE[profileIdx].mod != ModKind::LORA)) {
         return false;
     }
     Fw::ParamValid valid;

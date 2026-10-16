@@ -18,11 +18,11 @@
 #ifndef ZEPHYR_USP_RADIO_HPP
 #define ZEPHYR_USP_RADIO_HPP
 
-#include "fprime-zephyr/Drv/UspRadio/UspRadioComponentAc.hpp"
+#include <atomic>
+
 #include "fprime-zephyr/Drv/UspRadio/ProfilePolicy.hpp"
 #include "fprime-zephyr/Drv/UspRadio/RalSession.hpp"
-
-#include <atomic>
+#include "fprime-zephyr/Drv/UspRadio/UspRadioComponentAc.hpp"
 
 namespace Zephyr {
 
@@ -65,14 +65,10 @@ class UspRadio final : public UspRadioComponentBase {
     void run_handler(FwIndexType portNum, U32 context) override;
 
     //! Incoming frame to transmit
-    void dataIn_handler(FwIndexType portNum,
-                        Fw::Buffer& data,
-                        const ComCfg::FrameContext& context) override;
+    void dataIn_handler(FwIndexType portNum, Fw::Buffer& data, const ComCfg::FrameContext& context) override;
 
     //! Buffer returned by downstream after dataOut
-    void dataReturnIn_handler(FwIndexType portNum,
-                              Fw::Buffer& data,
-                              const ComCfg::FrameContext& context) override;
+    void dataReturnIn_handler(FwIndexType portNum, Fw::Buffer& data, const ComCfg::FrameContext& context) override;
 
     //! StartupManager transmit-enable signal.  Sync port on the caller thread:
     //! only enqueues deferredTransmitCmd(ENABLED) — all radio work stays on the
@@ -96,8 +92,7 @@ class UspRadio final : public UspRadioComponentBase {
 
     void deferredSetTxProfile_internalInterfaceHandler(const LinkProfileId& profile) override;
 
-    void deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId& profile,
-                                                       U16 revert_s) override;
+    void deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId& profile, U16 revert_s) override;
 
     void deferredContinuousWave_internalInterfaceHandler(U16 seconds) override;
 
@@ -105,17 +100,16 @@ class UspRadio final : public UspRadioComponentBase {
     // Command handlers — all async (deferred to component thread)
     // ----------------------------------------------------------------------
 
-    void TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq,
-                             UspTransmitState enabled) override;
+    void TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, const UspTransmitState& enabled) override;
 
-    void CONTINUOUS_WAVE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq,
-                                    U16 seconds) override;
+    void CONTINUOUS_WAVE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, U16 seconds) override;
 
-    void SET_TX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq,
-                                   LinkProfileId profile) override;
+    void SET_TX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, const LinkProfileId& profile) override;
 
-    void SET_RX_PROFILE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq,
-                                   LinkProfileId profile, U16 revert_s) override;
+    void SET_RX_PROFILE_cmdHandler(FwOpcodeType opCode,
+                                   U32 cmdSeq,
+                                   const LinkProfileId& profile,
+                                   U16 revert_s) override;
 
     // ----------------------------------------------------------------------
     // Helpers
@@ -145,9 +139,9 @@ class UspRadio final : public UspRadioComponentBase {
     // ----------------------------------------------------------------------
     // State
     // ----------------------------------------------------------------------
-    RalSession*       m_session;  //!< Injected via configure(); never null after start()
-    ProfilePolicy     m_policy;
-    UspTransmitState  m_transmitState;
+    RalSession* m_session;  //!< Injected via configure(); never null after start()
+    ProfilePolicy m_policy;
+    UspTransmitState m_transmitState;
 
     // Receive ring (SPSC: USP-thread producer onRxDone, component-thread
     // consumer deferredRxDone).  Producer owns m_rxHead, consumer owns m_rxTail;
@@ -156,40 +150,40 @@ class UspRadio final : public UspRadioComponentBase {
     static constexpr FwSizeType RX_SCRATCH_SIZE = MAX_PACKET_SIZE;
     static constexpr U32 RX_RING_DEPTH = 4;  // must be a power of two
     struct RxSlot {
-        uint8_t    data[RX_SCRATCH_SIZE];
+        uint8_t data[RX_SCRATCH_SIZE];
         FwSizeType len;
-        I16        rssi;
-        I8         snr;
+        I16 rssi;
+        I8 snr;
     };
-    RxSlot            m_rxRing[RX_RING_DEPTH];
-    std::atomic<U32>  m_rxHead;      //!< next slot to write (producer-owned)
-    std::atomic<U32>  m_rxTail;      //!< next slot to read (consumer-owned)
-    std::atomic<U32>  m_rxDropped;   //!< frames dropped: ring full at onRxDone
-    U32               m_rxDroppedReported;  //!< last value emitted (component thread)
-    I16               m_rxRssi;      //!< last received RSSI (component thread)
-    I8                m_rxSnr;       //!< last received SNR (component thread)
+    RxSlot m_rxRing[RX_RING_DEPTH];
+    std::atomic<U32> m_rxHead;     //!< next slot to write (producer-owned)
+    std::atomic<U32> m_rxTail;     //!< next slot to read (consumer-owned)
+    std::atomic<U32> m_rxDropped;  //!< frames dropped: ring full at onRxDone
+    U32 m_rxDroppedReported;       //!< last value emitted (component thread)
+    I16 m_rxRssi;                  //!< last received RSSI (component thread)
+    I8 m_rxSnr;                    //!< last received SNR (component thread)
 
     //! TX frames accepted by dataIn_handler but not yet processed by
     //! deferredTxPacket (incremented on the Svc.Com caller thread, decremented
     //! at deferred-handler entry).  When > 0 the per-frame continuous-RX re-arm
     //! is skipped (throughput); the DISABLING/DISABLED seams re-arm
     //! unconditionally, so the radio is never left deaf once the queue drains.
-    std::atomic<U32>  m_pendingTxFrames;
+    std::atomic<U32> m_pendingTxFrames;
 
     //! Set by the ENABLED TX path: re-arm continuous RX at the handler tail,
     //! after comStatusOut has released the one-in-flight com pipeline.
-    bool              m_rearmAfterTx;
+    bool m_rearmAfterTx;
 
     //! TX staging buffer for RadioHead-compat mode (header + payload).
     //! Sized to the on-air cap: compat mode limits the payload to
     //! MAX_PACKET_SIZE - 4 so header + payload always fits.  Component-thread
     //! only (written and consumed inside deferredTxPacket).
-    U8                m_txScratch[MAX_PACKET_SIZE];
+    U8 m_txScratch[MAX_PACKET_SIZE];
 
     // Telemetry accumulators
     FwSizeType m_bytesSent;
     FwSizeType m_bytesReceived;
-    U32        m_rxReverts;
+    U32 m_rxReverts;
 
     //! True when ProfilePolicy has committed an RX auto-revert but the hardware
     //! apply has not yet succeeded — retried each run tick (this flag is the only
