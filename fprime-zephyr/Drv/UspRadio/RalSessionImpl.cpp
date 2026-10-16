@@ -41,6 +41,7 @@
 // Pull in USP RAL pulse-shape / CRC enums
 // (smtc_rac_lib/smtc_ral/src is in the include path; include as <ral_defs.h>)
 extern "C" {
+#include <radio_planner.h>
 #include <ral_defs.h>
 }
 
@@ -103,6 +104,11 @@ int RalSessionImpl::init() {
     // from the RAC public API.  Note: zephyr_smtc_rac_init() is declared in the
     // USP Zephyr header but has no implementation — call smtc_rac_init() directly.
     smtc_rac_init();
+
+    // UspRadio holds a LOCK task for the whole RX window; the planner's 128 s
+    // dead-task failsafe would panic on it. smtc_rac_init() resets the flag, so
+    // this must follow it.
+    rp_disable_failsafe(smtc_rac_get_rp(), true);
 
     // Open a persistent radio access session at high priority.
     m_radio_id = smtc_rac_open_radio(RAC_HIGH_PRIORITY);
