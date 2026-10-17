@@ -1,0 +1,5 @@
+# mutexwait variant=opt1 consts={'DUR_US': '20000000', 'SPUR_US': '20000'}
+HOG_BURST_US=0 NO_PI=0 | RESULT spur_us=20000 hog_burst_us=0 no_pi=0 tx_returned=0 usp_waits=2 usp_wait_max_ms=0.00 comp_wait_max_ms=0.83 usp_hold_max_ms=24.18 comp_hold_max_ms=0.00 config_failed=0 panics=0 rx_delivered=0
+HOG_BURST_US=0 NO_PI=1 | RESULT spur_us=20000 hog_burst_us=0 no_pi=1 tx_returned=0 usp_waits=2 usp_wait_max_ms=0.00 comp_wait_max_ms=0.83 usp_hold_max_ms=24.18 comp_hold_max_ms=0.00 config_failed=0 panics=0 rx_delivered=0
+HOG_BURST_US=20000 NO_PI=0 | RESULT spur_us=20000 hog_burst_us=20000 no_pi=0 tx_returned=0 usp_waits=3 usp_wait_max_ms=0.00 comp_wait_max_ms=0.87 usp_hold_max_ms=17.02 comp_hold_max_ms=0.00 config_failed=0 panics=0 rx_delivered=0
+HOG_BURST_US=20000 NO_PI=1 | RESULT spur_us=20000 hog_burst_us=20000 no_pi=1 tx_returned=0 usp_waits=3 usp_wait_max_ms=0.00 comp_wait_max_ms=0.87 usp_hold_max_ms=17.02 comp_hold_max_ms=0.00 config_failed=0 panics=0 rx_delivered=0

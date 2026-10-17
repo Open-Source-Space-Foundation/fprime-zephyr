@@ -1,0 +1,5 @@
+LOG_ERR: Modem panic: smtc_rac_abort_radio_submit:475 radio_access_id is out of range
+PANIC @14920 us: smtc_rac_abort_radio_submit:475 radio_access_id is out of range
+REBOOT requested @115000 us (after panic: smtc_rac_abort_radio_submit:475 radio_access_id is out of range)
+INFO startRadio() returned 0 (expected 0: init failed)
+RESULT mode=fault_open panics=1 first_panic="smtc_rac_abort_radio_submit:475 radio_access_id is out of range" last_command="SET_RX_PROFILE"

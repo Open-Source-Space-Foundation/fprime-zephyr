@@ -1,0 +1,7 @@
+#pragma once
+#define KERNEL_VERSION_MAJOR 4
+#define KERNEL_VERSION_MINOR 3
+#define KERNEL_VERSION_PATCHLEVEL 0
+#define KERNEL_VERSION_NUMBER 0x040300
+#define ZEPHYR_VERSION_CODE 0x040300
+#define ZEPHYR_VERSION(a, b, c) (((a) << 16) + ((b) << 8) + (c))

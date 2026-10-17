@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" font-family="Helvetica,Arial,sans-serif" font-size="12">
+<rect width="760" height="380" fill="#fff"/>
+<text x="70" y="24" font-size="16" font-weight="bold" fill="#222">Claim A: old-profile frame confirms the NEW profile</text>
+<text x="70" y="42" fill="#555">share of SET_RX_PROFILE commands (60 phases each) that disarm the auto-revert wrongly; 125 kHz polled SPI, 40 B P5 frames</text>
+<rect x="70" y="50" width="12" height="12" rx="2" fill="#0072B2"/><text x="87" y="61" fill="#222">1  #14+#26</text>
+<rect x="260" y="50" width="12" height="12" rx="2" fill="#E69F00"/><text x="277" y="61" fill="#222">3  upstream mutex</text>
+<rect x="450" y="50" width="12" height="12" rx="2" fill="#009E73"/><text x="467" y="61" fill="#222">2  single queue</text>
+<line x1="70" x2="750" y1="310.0" y2="310.0" stroke="#e5e5e5"/><text x="64" y="314.0" text-anchor="end" fill="#666">0</text>
+<line x1="70" x2="750" y1="255.0" y2="255.0" stroke="#e5e5e5"/><text x="64" y="259.0" text-anchor="end" fill="#666">25</text>
+<line x1="70" x2="750" y1="200.0" y2="200.0" stroke="#e5e5e5"/><text x="64" y="204.0" text-anchor="end" fill="#666">50</text>
+<line x1="70" x2="750" y1="145.0" y2="145.0" stroke="#e5e5e5"/><text x="64" y="149.0" text-anchor="end" fill="#666">75</text>
+<line x1="70" x2="750" y1="90.0" y2="90.0" stroke="#e5e5e5"/><text x="64" y="94.0" text-anchor="end" fill="#666">100</text>
+<text x="14" y="190" fill="#555" transform="rotate(-90 14 190)" text-anchor="middle">false confirm, % of commands</text>
+<rect x="82.2" y="277.0" width="27.8" height="33.0" rx="3" fill="#0072B2"/>
+<text x="96.1" y="273.0" text-anchor="middle" fill="#222" font-size="11">15</text>
+<rect x="111.9" y="277.0" width="27.8" height="33.0" rx="3" fill="#E69F00"/>
+<text x="125.8" y="273.0" text-anchor="middle" fill="#222" font-size="11">15</text>
+<rect x="141.7" y="310.0" width="27.8" height="0.0" rx="3" fill="#009E73"/>
+<text x="155.6" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<text x="125.8" y="328" text-anchor="middle" fill="#222">12 ms</text>
+<rect x="193.8" y="291.7" width="27.8" height="18.3" rx="3" fill="#0072B2"/>
+<text x="207.7" y="287.7" text-anchor="middle" fill="#222" font-size="11">8</text>
+<rect x="223.6" y="291.7" width="27.8" height="18.3" rx="3" fill="#E69F00"/>
+<text x="237.5" y="287.7" text-anchor="middle" fill="#222" font-size="11">8</text>
+<rect x="253.4" y="310.0" width="27.8" height="0.0" rx="3" fill="#009E73"/>
+<text x="267.3" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<text x="237.5" y="328" text-anchor="middle" fill="#222">25 ms</text>
+<rect x="305.5" y="299.0" width="27.8" height="11.0" rx="3" fill="#0072B2"/>
+<text x="319.4" y="295.0" text-anchor="middle" fill="#222" font-size="11">5</text>
+<rect x="335.3" y="299.0" width="27.8" height="11.0" rx="3" fill="#E69F00"/>
+<text x="349.2" y="295.0" text-anchor="middle" fill="#222" font-size="11">5</text>
+<rect x="365.1" y="310.0" width="27.8" height="0.0" rx="3" fill="#009E73"/>
+<text x="378.9" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<text x="349.2" y="328" text-anchor="middle" fill="#222">50 ms</text>
+<rect x="417.2" y="302.7" width="27.8" height="7.3" rx="3" fill="#0072B2"/>
+<text x="431.1" y="298.7" text-anchor="middle" fill="#222" font-size="11">3</text>
+<rect x="446.9" y="302.7" width="27.8" height="7.3" rx="3" fill="#E69F00"/>
+<text x="460.8" y="298.7" text-anchor="middle" fill="#222" font-size="11">3</text>
+<rect x="476.7" y="310.0" width="27.8" height="0.0" rx="3" fill="#009E73"/>
+<text x="490.6" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<text x="460.8" y="328" text-anchor="middle" fill="#222">100 ms</text>
+<rect x="528.8" y="310.0" width="27.8" height="0.0" rx="3" fill="#0072B2"/>
+<text x="542.7" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<rect x="558.6" y="310.0" width="27.8" height="0.0" rx="3" fill="#E69F00"/>
+<text x="572.5" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<rect x="588.4" y="310.0" width="27.8" height="0.0" rx="3" fill="#009E73"/>
+<text x="602.3" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<text x="572.5" y="328" text-anchor="middle" fill="#222">250 ms</text>
+<rect x="640.5" y="310.0" width="27.8" height="0.0" rx="3" fill="#0072B2"/>
+<text x="654.4" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<rect x="670.3" y="310.0" width="27.8" height="0.0" rx="3" fill="#E69F00"/>
+<text x="684.2" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<rect x="700.1" y="310.0" width="27.8" height="0.0" rx="3" fill="#009E73"/>
+<text x="713.9" y="306.0" text-anchor="middle" fill="#222" font-size="11">0</text>
+<text x="684.2" y="328" text-anchor="middle" fill="#222">1000 ms</text>
+<line x1="70" x2="750" y1="310" y2="310" stroke="#888"/></svg>

@@ -1,0 +1,7 @@
+RESULT offset_us=55000 period_us=100000 false_confirm=1 confirms_p3=1 reverted=0 stale_p5_delivered_after_cmd=1 p3_delivered=0 panics=0
+  cmd posted at t=1113500
+  frame tag=1008 prof=5 rx_done=1113344 first_spi=1113374 read_end=1118338
+  ev t=1018971 RxDelivered a=1007 b=5
+  ev t=1154160 ProfileChanged a=1 b=3
+  ev t=1154226 ProfileConfirmed a=3 b=0
+  ev t=1154259 RxDelivered a=1008 b=5

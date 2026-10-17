@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" font-family="Helvetica,Arial,sans-serif" font-size="12">
+<rect width="760" height="380" fill="#fff"/>
+<text x="70" y="24" font-size="16" font-weight="bold" fill="#222">The other side of claim G: how late rateGroup1Hz runs while the radio receives</text>
+<text x="70" y="42" fill="#555">same runs; option 1 harvests on a priority-2 thread that burns polled-SPI CPU ahead of rg1</text>
+<rect x="70" y="50" width="12" height="12" rx="2" fill="#0072B2"/><text x="87" y="61" fill="#222">1  #14+#26</text>
+<rect x="260" y="50" width="12" height="12" rx="2" fill="#009E73"/><text x="277" y="61" fill="#222">2  single queue</text>
+<line x1="70" x2="750" y1="310.0" y2="310.0" stroke="#e5e5e5"/><text x="64" y="314.0" text-anchor="end" fill="#666">0.0</text>
+<line x1="70" x2="750" y1="255.0" y2="255.0" stroke="#e5e5e5"/><text x="64" y="259.0" text-anchor="end" fill="#666">4.6</text>
+<line x1="70" x2="750" y1="200.0" y2="200.0" stroke="#e5e5e5"/><text x="64" y="204.0" text-anchor="end" fill="#666">9.3</text>
+<line x1="70" x2="750" y1="145.0" y2="145.0" stroke="#e5e5e5"/><text x="64" y="149.0" text-anchor="end" fill="#666">13.9</text>
+<line x1="70" x2="750" y1="90.0" y2="90.0" stroke="#e5e5e5"/><text x="64" y="94.0" text-anchor="end" fill="#666">18.5</text>
+<text x="14" y="190" fill="#555" transform="rotate(-90 14 190)" text-anchor="middle">rg1 max lateness, ms</text>
+<rect x="87.8" y="118.7" width="65.0" height="191.3" rx="3" fill="#0072B2"/>
+<text x="120.2" y="114.7" text-anchor="middle" fill="#222" font-size="11">16.1</text>
+<rect x="154.8" y="288.6" width="65.0" height="21.4" rx="3" fill="#009E73"/>
+<text x="187.2" y="284.6" text-anchor="middle" fill="#222" font-size="11">1.8</text>
+<text x="153.8" y="328" text-anchor="middle" fill="#222">0.3 ms</text>
+<rect x="255.2" y="118.7" width="65.0" height="191.3" rx="3" fill="#0072B2"/>
+<text x="287.8" y="114.7" text-anchor="middle" fill="#222" font-size="11">16.1</text>
+<rect x="322.2" y="288.6" width="65.0" height="21.4" rx="3" fill="#009E73"/>
+<text x="354.8" y="284.6" text-anchor="middle" fill="#222" font-size="11">1.8</text>
+<text x="321.2" y="328" text-anchor="middle" fill="#222">5 ms</text>
+<rect x="422.8" y="118.7" width="65.0" height="191.3" rx="3" fill="#0072B2"/>
+<text x="455.2" y="114.7" text-anchor="middle" fill="#222" font-size="11">16.1</text>
+<rect x="489.8" y="288.6" width="65.0" height="21.4" rx="3" fill="#009E73"/>
+<text x="522.2" y="284.6" text-anchor="middle" fill="#222" font-size="11">1.8</text>
+<text x="488.8" y="328" text-anchor="middle" fill="#222">20 ms</text>
+<rect x="590.2" y="118.7" width="65.0" height="191.3" rx="3" fill="#0072B2"/>
+<text x="622.8" y="114.7" text-anchor="middle" fill="#222" font-size="11">16.1</text>
+<rect x="657.2" y="288.6" width="65.0" height="21.4" rx="3" fill="#009E73"/>
+<text x="689.8" y="284.6" text-anchor="middle" fill="#222" font-size="11">1.8</text>
+<text x="656.2" y="328" text-anchor="middle" fill="#222">50 ms</text>
+<line x1="70" x2="750" y1="310" y2="310" stroke="#888"/></svg>

@@ -1,0 +1,61 @@
+--- a/fprime-zephyr/Drv/UspRadio/UspRadio.hpp
++++ b/fprime-zephyr/Drv/UspRadio/UspRadio.hpp
+@@ -191,10 +191,12 @@
+         FwSizeType len;
+         I16        rssi;
+         I8         snr;
++        U32        epoch;  //!< m_rxEpoch when the frame was harvested (see deferredRxDone)
+     };
+     RxSlot            m_rxRing[RX_RING_DEPTH];
+     std::atomic<U32>  m_rxHead;      //!< next slot to write (producer-owned)
+     std::atomic<U32>  m_rxTail;      //!< next slot to read (consumer-owned)
++    std::atomic<U32>  m_rxEpoch;     //!< bumped each time RX is stopped for a profile change; slots older than this must not confirm
+     std::atomic<U32>  m_rxDropped;   //!< frames dropped: ring full at onRxDone
+     U32               m_rxDroppedReported;  //!< last value emitted (component thread)
+     I16               m_rxRssi;      //!< last received RSSI (component thread)
+--- a/fprime-zephyr/Drv/UspRadio/UspRadio.cpp
++++ b/fprime-zephyr/Drv/UspRadio/UspRadio.cpp
+@@ -29,6 +29,7 @@
+       m_transmitState(UspTransmitState::DISABLED),
+       m_rxHead(0),
+       m_rxTail(0),
++      m_rxEpoch(0),
+       m_rxDropped(0),
+       m_rxDroppedReported(0),
+       m_rxRssi(0),
+@@ -128,6 +129,7 @@
+     slot.len  = safeSize;
+     slot.rssi = rssi;
+     slot.snr  = snr;
++    slot.epoch = m_rxEpoch.load(std::memory_order_acquire);
+     // Publish the slot before the message can be consumed.
+     m_rxHead.store(head + 1, std::memory_order_release);
+ 
+@@ -166,6 +168,7 @@
+             this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
+             return;
+         }
++        m_rxEpoch.fetch_add(1, std::memory_order_acq_rel);
+         if (!rearmRx()) {
+             return;  // ConfigurationFailed already logged; retry next tick
+         }
+@@ -214,7 +217,10 @@
+     const RxSlot& slot = m_rxRing[tail % RX_RING_DEPTH];
+ 
+     // Notify ProfilePolicy that a frame was received
+-    ProfilePolicy::Action action = m_policy.frameReceived();
++    // A frame harvested before the last RX stop was received on the previous arm: it may not confirm the pending profile.
++    ProfilePolicy::Action action = (slot.epoch == m_rxEpoch.load(std::memory_order_acquire))
++                                       ? m_policy.frameReceived()
++                                       : ProfilePolicy::Action::kNoOp;
+     if (action == ProfilePolicy::Action::kConfirmRx) {
+         this->log_ACTIVITY_LO_ProfileConfirmed(
+             static_cast<LinkProfileId::T>(m_policy.rxProfile()));
+@@ -554,6 +560,7 @@
+         this->log_WARNING_LO_ProfileChangeDeferred(UspRadioDirection::RX);
+         return;
+     }
++    m_rxEpoch.fetch_add(1, std::memory_order_acq_rel);  // RX is stopped: nothing harvested from now on belongs to the old arm
+     if (rearmRx()) {
+         // RX is now armed on an explicitly requested profile — supersedes any
+         // pending revert hardware re-arm.

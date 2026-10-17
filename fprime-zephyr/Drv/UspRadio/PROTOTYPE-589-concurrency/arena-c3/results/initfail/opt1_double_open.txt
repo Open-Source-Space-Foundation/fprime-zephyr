@@ -1,0 +1,4 @@
+LOG_ERR: Modem panic: rp_hook_init:266 
+PANIC @58449 us: rp_hook_init:266 
+REBOOT requested @158500 us (after panic: rp_hook_init:266 )
+RESULT mode=double_open panics=1 first_panic="rp_hook_init:266 " last_command="second smtc_rac_open_radio()"

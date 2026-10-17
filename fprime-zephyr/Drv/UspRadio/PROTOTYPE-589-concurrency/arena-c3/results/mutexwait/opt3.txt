@@ -1,0 +1,9 @@
+# mutexwait variant=opt3 consts={'DUR_US': '20000000'}
+HOG_BURST_US=0 NO_PI=0 | RESULT spur_us=0 hog_burst_us=0 no_pi=0 tx_returned=24 usp_waits=198 usp_wait_max_ms=0.00 comp_wait_max_ms=2.54 usp_hold_max_ms=2.82 comp_hold_max_ms=30.00 config_failed=0 panics=0 rx_delivered=0
+HOG_BURST_US=0 NO_PI=1 | RESULT spur_us=0 hog_burst_us=0 no_pi=1 tx_returned=24 usp_waits=198 usp_wait_max_ms=0.00 comp_wait_max_ms=2.54 usp_hold_max_ms=2.82 comp_hold_max_ms=30.00 config_failed=0 panics=0 rx_delivered=0
+HOG_BURST_US=3000 NO_PI=0 | RESULT spur_us=0 hog_burst_us=3000 no_pi=0 tx_returned=46 usp_waits=366 usp_wait_max_ms=0.00 comp_wait_max_ms=6.84 usp_hold_max_ms=2.80 comp_hold_max_ms=34.60 config_failed=0 panics=0 rx_delivered=0
+HOG_BURST_US=3000 NO_PI=1 | RESULT spur_us=0 hog_burst_us=3000 no_pi=1 tx_returned=46 usp_waits=366 usp_wait_max_ms=0.00 comp_wait_max_ms=6.84 usp_hold_max_ms=2.80 comp_hold_max_ms=34.60 config_failed=0 panics=0 rx_delivered=0
+HOG_BURST_US=20000 NO_PI=0 | RESULT spur_us=0 hog_burst_us=20000 no_pi=0 tx_returned=46 usp_waits=349 usp_wait_max_ms=0.00 comp_wait_max_ms=21.14 usp_hold_max_ms=8.89 comp_hold_max_ms=52.10 config_failed=0 panics=0 rx_delivered=4
+HOG_BURST_US=20000 NO_PI=1 | RESULT spur_us=0 hog_burst_us=20000 no_pi=1 tx_returned=35 usp_waits=272 usp_wait_max_ms=6.27 comp_wait_max_ms=20.91 usp_hold_max_ms=11.10 comp_hold_max_ms=56.60 config_failed=0 panics=0 rx_delivered=2
+HOG_BURST_US=40000 NO_PI=0 | RESULT spur_us=0 hog_burst_us=40000 no_pi=0 tx_returned=25 usp_waits=196 usp_wait_max_ms=0.00 comp_wait_max_ms=51.93 usp_hold_max_ms=18.67 comp_hold_max_ms=192.00 config_failed=0 panics=0 rx_delivered=18
+HOG_BURST_US=40000 NO_PI=1 | RESULT spur_us=0 hog_burst_us=40000 no_pi=1 tx_returned=15 usp_waits=130 usp_wait_max_ms=55.82 comp_wait_max_ms=98.74 usp_hold_max_ms=17.09 comp_hold_max_ms=192.00 config_failed=0 panics=0 rx_delivered=14

@@ -1,0 +1,4 @@
+opt1 flow=tx txprof=0 :: RESULT flow=tx txprof=0 len=252 airtime_ms=696.8 probe_delay_ms=577.1 tx_returned_ms=749.5 send_failed=0 rx_alive_after=1 chip_rx=1
+opt1 flow=tx txprof=5 :: RESULT flow=tx txprof=5 len=252 airtime_ms=25.2 probe_delay_ms=0.1 tx_returned_ms=80.7 send_failed=0 rx_alive_after=1 chip_rx=1
+opt1 flow=cw txprof=0 :: RESULT flow=cw txprof=0 len=252 airtime_ms=696.8 probe_delay_ms=4849.8 tx_returned_ms=-1.0 send_failed=0 rx_alive_after=1 chip_rx=1
+opt1 flow=hang :: RESULT flow=hang txprof=5 len=252 airtime_ms=25.2 probe_delay_ms=9893.3 tx_returned_ms=10066.5 send_failed=1 rx_alive_after=1 chip_rx=1

@@ -1,0 +1,7 @@
+# rearm variant=opt2 consts={'FLOW': 'txN', 'NFRAMES': '8'}
+CHIP_SPI_HZ=125000 CHIP_TCXO_MS=10 | RESULT flow=txN len=252 txprof=5 frames=8 t_first_tx_start_ms=39.6 t_last_txdone_ms=689.6 t_rx_relisten_ms=712.6 rx_deaf_total_ms=707.3 txstarts=8 airtime_ms=25.2 burst_total_ms=691.8 returned=8
+CHIP_SPI_HZ=125000 CHIP_TCXO_MS=2 | RESULT flow=txN len=252 txprof=5 frames=8 t_first_tx_start_ms=31.6 t_last_txdone_ms=571.3 t_rx_relisten_ms=586.2 rx_deaf_total_ms=580.9 txstarts=8 airtime_ms=25.2 burst_total_ms=573.2 returned=8
+CHIP_SPI_HZ=1000000 CHIP_TCXO_MS=10 | RESULT flow=txN len=252 txprof=5 frames=8 t_first_tx_start_ms=17.9 t_last_txdone_ms=470.2 t_rx_relisten_ms=486.1 rx_deaf_total_ms=483.2 txstarts=8 airtime_ms=25.2 burst_total_ms=471.8 returned=8
+CHIP_SPI_HZ=1000000 CHIP_TCXO_MS=2 | RESULT flow=txN len=252 txprof=5 frames=8 t_first_tx_start_ms=10.2 t_last_txdone_ms=346.7 t_rx_relisten_ms=354.6 rx_deaf_total_ms=351.7 txstarts=8 airtime_ms=25.2 burst_total_ms=348.2 returned=8
+CHIP_SPI_HZ=8000000 CHIP_TCXO_MS=10 | RESULT flow=txN len=252 txprof=5 frames=8 t_first_tx_start_ms=16.0 t_last_txdone_ms=444.1 t_rx_relisten_ms=460.0 rx_deaf_total_ms=457.0 txstarts=8 airtime_ms=25.2 burst_total_ms=445.6 returned=8
+CHIP_SPI_HZ=8000000 CHIP_TCXO_MS=2 | RESULT flow=txN len=252 txprof=5 frames=8 t_first_tx_start_ms=8.0 t_last_txdone_ms=330.2 t_rx_relisten_ms=338.1 rx_deaf_total_ms=335.1 txstarts=8 airtime_ms=25.2 burst_total_ms=331.6 returned=8

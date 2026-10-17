@@ -1,0 +1,2 @@
+# busyloop variant=opt1_v121_prio14 consts={'DUR_US': '10000000', 'RX_PERIOD_US': '100000000'}
+PROBE=0 | RESULT dur_s=9.3 usp_thread_cpu_pct=96.7 idle_pct=0.3 probes_posted=18 probes_run=0 probe_latency_ms_max=-1.0 probe_latency_ms_mean=-1.0 rx_delivered=0/0 rg1_cycles=9 rg1_late_ms_max=1.8 rg10_cycles=93 rg10_late_ms_max=0.3 rg50_late_ms_max=0.4 mm_cycles=18 mm_late_ms_max=5.8 uspRadio_cpu_ms=0.0

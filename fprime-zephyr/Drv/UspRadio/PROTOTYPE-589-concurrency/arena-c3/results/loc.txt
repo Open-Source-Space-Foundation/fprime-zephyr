@@ -1,0 +1,22 @@
+option 1 (#14+#26, as committed): code_lines=920 files=['UspRadio.cpp', 'UspRadio.hpp', 'RalSessionImpl.cpp', 'RalSessionImpl.hpp']
+    k_sem take+give calls                16
+    atomics (std::atomic uses)           26
+    k_sleep                              4
+    tasks[] reads                        8
+    k_mutex / SMTC_SW_PLATFORM           0
+    k_thread_create                      0
+option 3 (diff applied): code_lines=924 files=['UspRadio.cpp', 'UspRadio.hpp', 'RalSessionImpl.cpp', 'RalSessionImpl.hpp']
+    k_sem take+give calls                16
+    atomics (std::atomic uses)           26
+    k_sleep                              4
+    tasks[] reads                        1
+    k_mutex / SMTC_SW_PLATFORM           11
+    k_thread_create                      0
+option 2 (sketch completed; excludes the ~95-line apply_params.inc, see below): code_lines=575 files=['UspRadioSt.cpp', 'UspRadioSt.hpp', 'RalSessionSt.cpp', 'RalSessionSt.hpp']
+    k_sem take+give calls                1
+    atomics (std::atomic uses)           3
+    k_sleep                              0
+    tasks[] reads                        0
+    k_mutex / SMTC_SW_PLATFORM           0
+    k_thread_create                      1
+option 2 apply_params.inc (applyLoRa/applyGfsk, unchanged from RalSessionImpl): 63

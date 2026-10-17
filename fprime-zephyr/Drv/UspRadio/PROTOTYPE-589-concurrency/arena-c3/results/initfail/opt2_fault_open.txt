@@ -1,0 +1,8 @@
+INFO startRadio() returned 0 (expected 0: init failed)
+INFO after SET_RX_PROFILE     panics=0
+INFO after SET_TX_PROFILE     panics=0
+INFO after TRANSMIT(enable)   panics=0
+INFO after TRANSMIT(disable)  panics=0
+INFO after CONTINUOUS_WAVE    panics=0
+INFO after run(1Hz tick)      panics=0
+RESULT mode=fault_open panics=0 first_panic="" last_command="run(1Hz tick)"
