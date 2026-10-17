@@ -7,6 +7,9 @@ upstream's mutex mode?
 
 Base: `fix/uspradio-integration-c123` @ 25d5cd2 (#26 head).
 
+**Superseded numbers:** the side-by-side table below is the pre-arena estimate. The measured verdicts and the
+updated recommendation are in [SYNTHESIS.md](SYNTHESIS.md); the simulation is `arena-c3/` (`./run_all.sh`).
+
 | File | What it is |
 | --- | --- |
 | `concurrency-demo.html` | Open it by double-click. Runs 7 scenarios against each option, step by step. |
