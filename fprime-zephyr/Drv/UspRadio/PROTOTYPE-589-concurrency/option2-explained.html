@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option 2: one thread owns the radio (#589)</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --surface-0: #f4f4f2; --surface-1: #fcfcfb; --line: #e2e1dc; --grid: #ecebe7;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7b7a75;
+  --opt1: #eb6834; --opt3: #1baf7a; --opt2: #2a78d6;
+  --opt2-soft: #e3eefb; --opt1-soft: #fdebe3; --chip: #f0efeb;
+  --thread-comp: #2a78d6; --thread-usp: #eb6834; --thread-irq: #7b7a75;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --line: #34332f; --grid: #2a2a27;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --opt1: #d95926; --opt3: #199e70; --opt2: #3987e5;
+    --opt2-soft: #1d2a3b; --opt1-soft: #3a2219; --chip: #262624;
+    --thread-comp: #3987e5; --thread-usp: #d95926; --thread-irq: #8f8e86;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --surface-0: #121211; --surface-1: #1a1a19; --line: #34332f; --grid: #2a2a27;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --opt1: #d95926; --opt3: #199e70; --opt2: #3987e5;
+  --opt2-soft: #1d2a3b; --opt1-soft: #3a2219; --chip: #262624;
+  --thread-comp: #3987e5; --thread-usp: #d95926; --thread-irq: #8f8e86;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.viz-root { background: var(--surface-0); color: var(--text-primary); font: 15px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif; min-height: 100vh; }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; }
+.tag { display: inline-block; font-size: 12px; color: var(--text-secondary); background: var(--chip); border-radius: 4px; padding: 2px 8px; }
+h1 { font-size: 28px; margin: 10px 0 4px; letter-spacing: -.01em; }
+.lede { color: var(--text-secondary); margin: 0 0 22px; max-width: 760px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 36px 0 10px; font-weight: 600; }
+.fig { background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+.fig + .note, .note { color: var(--text-secondary); font-size: 13.5px; margin: 8px 2px 0; }
+.row { display: grid; gap: 16px; }
+.row.two { grid-template-columns: 1fr 1fr; }
+.row.five { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 900px) { .row.two, .row.five { grid-template-columns: 1fr; } }
+svg { display: block; width: 100%; height: auto; }
+svg text { fill: var(--text-primary); font-family: inherit; }
+svg .sec { fill: var(--text-secondary); }
+svg .mut { fill: var(--text-muted); }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin: 0 0 10px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.mini h3 { margin: 0 0 2px; font-size: 13.5px; }
+.mini p { margin: 0 0 8px; font-size: 12px; color: var(--text-muted); min-height: 32px; }
+.tip { position: fixed; pointer-events: none; background: var(--surface-1); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 12.5px; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none; z-index: 5; max-width: 260px; }
+.tip b { display: block; }
+.hit { fill: transparent; cursor: default; }
+table.data { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.data th, table.data td { border-bottom: 1px solid var(--line); padding: 5px 8px; text-align: left; }
+table.data th { color: var(--text-secondary); font-weight: 600; }
+details { margin-top: 10px; color: var(--text-secondary); font-size: 13px; }
+.drills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 900px) { .drills { grid-template-columns: 1fr; } }
+.drill { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; background: var(--surface-1); }
+.drill b { display: block; font-size: 13.5px; margin-bottom: 2px; }
+.drill span { color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<main>
+  <span class="tag">Wayfinder #589 · UspRadio concurrency · host simulation of the real usp/UspRadio code, not yet on target</span>
+  <h1>Option 2: one thread owns the radio</h1>
+  <p class="lede">Turn off the USP thread (<code>CONFIG_USP_MAIN_THREAD=n</code>). UspRadio's own F´ thread runs the Semtech engine, so radio state never crosses a thread.</p>
+
+  <!-- ============ 1. Architecture ============ -->
+  <h2>1 · Who touches the radio</h2>
+  <div class="row two">
+    <div class="fig">
+      <svg viewBox="0 0 500 330" role="img" aria-label="Today: two threads share the radio planner">
+        <text x="0" y="16" font-weight="600" font-size="15">Today (#14 + #26)</text>
+        <text x="0" y="34" class="mut" font-size="12">two threads inside the radio planner</text>
+        <!-- component thread -->
+        <rect x="10" y="60" width="190" height="200" rx="10" fill="var(--opt2-soft)" stroke="var(--thread-comp)" stroke-width="1.5"/>
+        <text x="24" y="84" font-weight="600" font-size="13">UspRadio thread</text>
+        <text x="24" y="101" class="sec" font-size="11.5">prio 11 · commands, TX, profiles</text>
+        <rect x="24" y="116" width="162" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="34" y="133" font-size="12">TX blocks ≤ 10 s on k_sem</text>
+        <rect x="24" y="150" width="162" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="34" y="167" font-size="12">stop polls tasks[] + k_sleep</text>
+        <rect x="24" y="184" width="162" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="34" y="201" font-size="12">quiesce: raw SPI, no lock</text>
+        <rect x="24" y="218" width="162" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="34" y="235" font-size="12">lock_radio_access: no mutex</text>
+        <!-- usp thread -->
+        <rect x="300" y="60" width="190" height="200" rx="10" fill="var(--opt1-soft)" stroke="var(--thread-usp)" stroke-width="1.5"/>
+        <text x="314" y="84" font-weight="600" font-size="13">USP thread</text>
+        <text x="314" y="101" class="sec" font-size="11.5">prio 2 · runs the engine</text>
+        <rect x="314" y="116" width="162" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="324" y="133" font-size="12">engine pass (fork mutex)</text>
+        <rect x="314" y="150" width="162" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="324" y="167" font-size="12">RX harvest → 4-slot ring</text>
+        <rect x="314" y="184" width="162" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="324" y="201" font-size="12">k_sem_give to UspRadio</text>
+        <!-- crossings -->
+        <g stroke="var(--text-muted)" stroke-width="1.2" fill="none">
+          <path d="M200 129 H300" marker-end="url(#a1)" marker-start="url(#a1s)"/>
+          <path d="M200 163 H300" marker-end="url(#a1)" marker-start="url(#a1s)"/>
+          <path d="M200 197 H300" marker-end="url(#a1)" marker-start="url(#a1s)"/>
+          <path d="M200 231 H300" marker-end="url(#a1)" marker-start="url(#a1s)"/>
+        </g>
+        <defs>
+          <marker id="a1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--text-muted)"/></marker>
+          <marker id="a1s" viewBox="0 0 8 8" refX="1" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M8 0L0 4L8 8z" fill="var(--text-muted)"/></marker>
+        </defs>
+        <rect x="214" y="138" width="72" height="66" rx="6" fill="var(--surface-1)" stroke="var(--opt1)" stroke-dasharray="3 3"/>
+        <text x="250" y="160" text-anchor="middle" font-size="11.5" font-weight="600">shared</text>
+        <text x="250" y="175" text-anchor="middle" font-size="11" class="sec">16 k_sem</text>
+        <text x="250" y="189" text-anchor="middle" font-size="11" class="sec">26 atomics</text>
+        <!-- chip -->
+        <rect x="150" y="282" width="200" height="38" rx="8" fill="var(--chip)" stroke="var(--line)"/>
+        <text x="250" y="306" text-anchor="middle" font-size="13" font-weight="600">SX1262 (SPI, 125 kHz)</text>
+        <path d="M110 260 L190 282" stroke="var(--thread-comp)" stroke-width="1.5"/>
+        <path d="M390 260 L310 282" stroke="var(--thread-usp)" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="fig">
+      <svg viewBox="0 0 500 330" role="img" aria-label="Option 2: one thread runs the engine">
+        <text x="0" y="16" font-weight="600" font-size="15">Option 2 (single queue)</text>
+        <text x="0" y="34" class="mut" font-size="12">one thread inside the radio planner; the IRQ side only posts a kick</text>
+        <!-- irq + pump -->
+        <rect x="10" y="60" width="140" height="52" rx="8" fill="var(--chip)" stroke="var(--line)"/>
+        <text x="22" y="82" font-size="12.5" font-weight="600">DIO1 / RAC timer</text>
+        <text x="22" y="99" class="sec" font-size="11.5">sets flags, gives sem</text>
+        <rect x="10" y="140" width="140" height="52" rx="8" fill="var(--chip)" stroke="var(--line)"/>
+        <text x="22" y="162" font-size="12.5" font-weight="600">kick pump</text>
+        <text x="22" y="179" class="sec" font-size="11.5">posts 1 coalesced kick</text>
+        <path d="M80 112 V140" stroke="var(--text-muted)" stroke-width="1.2" marker-end="url(#a2)"/>
+        <!-- queue -->
+        <g transform="translate(176,150)">
+          <rect x="0" y="0" width="28" height="30" rx="3" fill="var(--surface-1)" stroke="var(--line)"/>
+          <rect x="30" y="0" width="28" height="30" rx="3" fill="var(--surface-1)" stroke="var(--line)"/>
+          <rect x="60" y="0" width="28" height="30" rx="3" fill="var(--opt2)" />
+          <text x="74" y="19" text-anchor="middle" font-size="10" fill="#fff" style="fill:#fff">kick</text>
+          <text x="44" y="46" text-anchor="middle" font-size="11" class="sec">F´ queue</text>
+        </g>
+        <path d="M150 166 H174" stroke="var(--text-muted)" stroke-width="1.2" marker-end="url(#a2)"/>
+        <path d="M266 166 H292" stroke="var(--text-muted)" stroke-width="1.2" marker-end="url(#a2)"/>
+        <defs><marker id="a2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--text-muted)"/></marker></defs>
+        <!-- component thread -->
+        <rect x="294" y="60" width="196" height="200" rx="10" fill="var(--opt2-soft)" stroke="var(--thread-comp)" stroke-width="1.5"/>
+        <text x="308" y="84" font-weight="600" font-size="13">UspRadio thread</text>
+        <text x="308" y="101" class="sec" font-size="11.5">everything, in queue order</text>
+        <rect x="308" y="116" width="168" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="318" y="133" font-size="12">engineKick → run engine</text>
+        <rect x="308" y="150" width="168" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="318" y="167" font-size="12">armRx(profile) in 1 window</text>
+        <rect x="308" y="184" width="168" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="318" y="201" font-size="12">startTx → returns at once</text>
+        <rect x="308" y="218" width="168" height="26" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="318" y="235" font-size="12">stop() synchronous</text>
+        <!-- chip -->
+        <rect x="150" y="282" width="200" height="38" rx="8" fill="var(--chip)" stroke="var(--line)"/>
+        <text x="250" y="306" text-anchor="middle" font-size="13" font-weight="600">SX1262 (SPI, 125 kHz)</text>
+        <path d="M392 260 L320 282" stroke="var(--thread-comp)" stroke-width="1.5"/>
+        <text x="20" y="236" font-size="12" class="sec">1 k_sem · 3 atomics</text>
+        <text x="20" y="252" font-size="12" class="sec">0 k_sleep · 0 tasks[] polls</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ============ 2. Lifecycles ============ -->
+  <h2>2 · A frame in, a frame out</h2>
+  <div class="row two">
+    <div class="fig">
+      <svg viewBox="0 0 500 250" role="img" aria-label="RX path in option 2">
+        <text x="0" y="16" font-weight="600" font-size="15">RX: interrupt to deframer</text>
+        <g font-size="11.5" class="sec">
+          <text x="70" y="44" text-anchor="middle">chip</text><text x="190" y="44" text-anchor="middle">pump</text><text x="330" y="44" text-anchor="middle">UspRadio thread</text><text x="455" y="44" text-anchor="middle">deframer</text>
+        </g>
+        <g stroke="var(--grid)" stroke-width="2"><line x1="70" y1="52" x2="70" y2="240"/><line x1="190" y1="52" x2="190" y2="240"/><line x1="330" y1="52" x2="330" y2="240"/><line x1="455" y1="52" x2="455" y2="240"/></g>
+        <g font-size="12">
+          <path d="M70 76 H186" stroke="var(--text-muted)" marker-end="url(#a3)"/><text x="78" y="70">DIO1 · RX_DONE</text>
+          <path d="M190 106 H326" stroke="var(--text-muted)" marker-end="url(#a3)"/><text x="198" y="100">engineKick (0.03 ms)</text>
+          <rect x="322" y="118" width="16" height="70" rx="3" fill="var(--opt2)"/>
+          <text x="346" y="136">engine pass</text>
+          <text x="346" y="152" class="sec" font-size="11">read 252 B: ~17 ms SPI</text>
+          <text x="346" y="168" class="sec" font-size="11">confirm profile, re-arm RX</text>
+          <path d="M338 210 H451" stroke="var(--text-muted)" marker-end="url(#a3)"/><text x="346" y="204">dataOut</text>
+        </g>
+        <defs><marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--text-muted)"/></marker></defs>
+      </svg>
+    </div>
+    <div class="fig">
+      <svg viewBox="0 0 500 255" role="img" aria-label="Downlink credit state machine">
+        <text x="0" y="16" font-weight="600" font-size="15">TX: one field replaces three</text>
+        <text x="0" y="34" class="mut" font-size="12">comStatus fires only on the two blue edges</text>
+        <defs><marker id="a4" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--text-muted)"/></marker>
+              <marker id="a4b" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--opt2)"/></marker></defs>
+        <g font-size="12.5" font-weight="600" text-anchor="middle">
+          <rect x="10" y="100" width="120" height="44" rx="22" fill="var(--surface-1)" stroke="var(--line)" stroke-width="1.5"/><text x="70" y="127">NO_CREDIT</text>
+          <rect x="190" y="100" width="120" height="44" rx="22" fill="var(--opt2-soft)" stroke="var(--opt2)" stroke-width="1.5"/><text x="250" y="127">CREDIT_OUT</text>
+          <rect x="370" y="100" width="120" height="44" rx="22" fill="var(--surface-1)" stroke="var(--line)" stroke-width="1.5"/><text x="430" y="127">FRAME_HELD</text>
+        </g>
+        <path d="M130 122 H188" stroke="var(--opt2)" stroke-width="2" marker-end="url(#a4b)"/>
+        <text x="159" y="96" text-anchor="middle" font-size="11" class="sec">TRANSMIT</text><text x="159" y="110" text-anchor="middle" font-size="11" class="sec">ENABLED</text>
+        <path d="M300 102 C 340 62, 380 62, 418 100" stroke="var(--text-muted)" fill="none" stroke-width="1.5" marker-end="url(#a4)"/>
+        <text x="360" y="62" text-anchor="middle" font-size="11" class="sec">frame dequeued → startTx</text>
+        <path d="M418 144 C 380 184, 340 184, 302 144" stroke="var(--opt2)" fill="none" stroke-width="2" marker-end="url(#a4b)"/>
+        <text x="360" y="196" text-anchor="middle" font-size="11" class="sec">TX_DONE kick (or dropped)</text>
+        <text x="250" y="226" text-anchor="middle" font-size="12">No edge out of CREDIT_OUT emits a comStatus,</text>
+        <text x="250" y="243" text-anchor="middle" font-size="12">so a double SUCCESS into ComQueue can't happen</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ============ 3. Profile switch ============ -->
+  <h2>3 · A profile switch with an old frame in flight</h2>
+  <div class="fig">
+    <svg viewBox="0 0 1060 250" role="img" aria-label="Timeline comparing how a stale frame is handled">
+      <defs><marker id="a5" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="var(--text-muted)"/></marker></defs>
+      <!-- lanes -->
+      <text x="0" y="62" font-weight="600" font-size="13">Today</text>
+      <text x="0" y="78" class="mut" font-size="11.5">USP thread harvests</text>
+      <text x="0" y="172" font-weight="600" font-size="13">Option 2</text>
+      <text x="0" y="188" class="mut" font-size="11.5">one thread, in order</text>
+      <line x1="150" y1="70" x2="1050" y2="70" stroke="var(--grid)" stroke-width="2"/>
+      <line x1="150" y1="180" x2="1050" y2="180" stroke="var(--grid)" stroke-width="2"/>
+      <!-- shared events -->
+      <g font-size="12">
+        <circle cx="200" cy="70" r="6" fill="var(--text-muted)"/><text x="200" y="48" text-anchor="middle">SET_RX_PROFILE P4</text><text x="200" y="98" text-anchor="middle" class="sec" font-size="11">queued</text>
+        <circle cx="330" cy="70" r="6" fill="var(--opt1)"/><text x="330" y="48" text-anchor="middle">P0 frame lands</text><text x="330" y="98" text-anchor="middle" class="sec" font-size="11">into ring, msg behind SET</text>
+        <rect x="440" y="58" width="160" height="24" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="520" y="75" text-anchor="middle">SET: arm P4, P4 pending</text>
+        <rect x="630" y="58" width="190" height="24" rx="5" fill="var(--opt1-soft)" stroke="var(--opt1)"/><text x="725" y="75" text-anchor="middle">P0 frame confirms P4 ✕</text>
+        <text x="1050" y="48" text-anchor="end" font-weight="600">auto-revert disarmed</text>
+        <text x="1050" y="98" text-anchor="end" class="sec" font-size="11">board stranded on P4 · 3–15% of switches</text>
+
+        <circle cx="200" cy="180" r="6" fill="var(--text-muted)"/><text x="200" y="158" text-anchor="middle">SET_RX_PROFILE P4</text>
+        <circle cx="330" cy="180" r="6" fill="var(--opt2)"/><text x="330" y="158" text-anchor="middle">P0 frame lands</text><text x="330" y="208" text-anchor="middle" class="sec" font-size="11">kick queued behind SET</text>
+        <rect x="440" y="168" width="160" height="24" rx="5" fill="var(--surface-1)" stroke="var(--line)"/><text x="520" y="185" text-anchor="middle">SET: stop() aborts RX</text>
+        <text x="520" y="208" text-anchor="middle" class="sec" font-size="11">LOCK → UNLOCK, frame not read</text>
+        <rect x="630" y="168" width="190" height="24" rx="5" fill="var(--opt2-soft)" stroke="var(--opt2)"/><text x="725" y="185" text-anchor="middle">kick: nothing to read ✓</text>
+        <text x="1050" y="158" text-anchor="end" font-weight="600">revert still armed</text>
+        <text x="1050" y="208" text-anchor="end" class="sec" font-size="11">0 of 360 · cost: that P0 frame is dropped</text>
+      </g>
+      <text x="150" y="240" class="mut" font-size="11">time →</text>
+    </svg>
+  </div>
+
+  <!-- ============ 4. Measured ============ -->
+  <h2>4 · What the simulation measured</h2>
+  <div class="legend"><span><i style="background:var(--opt1)"></i>1 · Today (#14 + #26)</span><span><i style="background:var(--opt3)"></i>3 · Upstream mutex</span><span><i style="background:var(--opt2)"></i>2 · Single queue</span></div>
+  <div class="row five" id="minis"></div>
+  <p class="note">Lower is better in every panel. Host simulation (virtual-time Zephyr scheduler, real planner/driver/UspRadio code); option 3's diff does not yet compile on target.</p>
+  <details><summary>Table view</summary><table class="data" id="tbl"></table></details>
+
+  <!-- ============ 5. Cost ============ -->
+  <h2>5 · What option 2 pays</h2>
+  <div class="row two">
+    <div class="fig">
+      <div class="mini"><h3>Lost P5 frames vs. rate-group burst</h3><p>252 B frames, 25 ms apart · uspRadio at prio 11, below the rate groups</p></div>
+      <svg id="cost" viewBox="0 0 480 230" role="img" aria-label="Frame loss versus rate-group burst length"></svg>
+    </div>
+    <div class="fig">
+      <div class="mini"><h3>…and what option 1 pays instead</h3><p>max delay added to higher-priority work by the prio-2 USP harvest</p></div>
+      <svg id="cost2" viewBox="0 0 480 230" role="img" aria-label="Rate group delay"></svg>
+    </div>
+  </div>
+  <p class="note">The knob is uspRadio's priority. It gets set from on-target rate-group burst times, not from this chart.</p>
+
+  <!-- ============ 6. Next ============ -->
+  <h2>6 · Before it ships</h2>
+  <div class="drills">
+    <div class="drill"><b>SPI clock and mode</b><span>125 kHz polled makes one 252 B read ≈ 17 ms in every option</span></div>
+    <div class="drill"><b>Rate-group burst times</b><span>RgMaxTime of 50/10/1 Hz + ModeManager sets uspRadio's priority</span></div>
+    <div class="drill"><b>Option-2 build on the dev v5e</b><span>DIO1→read latency; 10k nested txDone→armRx cycles</span></div>
+    <div class="drill"><b>Sketch fixes</b><span>m_state before lock · rp_disable_failsafe(rp, true) · missing include</span></div>
+    <div class="drill"><b>Stay on usp v1.0.0</b><span>until option 2 lands; v1.2.1 spins options 1 and 3</span></div>
+    <div class="drill"><b>Fallback</b><span>option 3 + ring epoch tag + C++-safe mutex guard</span></div>
+  </div>
+</main>
+<div class="tip" id="tip"></div>
+</div>
+
+<script>
+const OPTS = [
+  { k: "opt1", name: "1 · Today" },
+  { k: "opt3", name: "3 · Mutex" },
+  { k: "opt2", name: "2 · Single queue" },
+];
+const METRICS = [
+  { t: "False profile confirms", s: "% of switches, 83 fps stale stream", u: "%", v: [15, 15, 0], d: 0 },
+  { t: "Radio stalls", s: "% of 20 s storms (polled SPI)", u: "%", v: [58, 0, 0], d: 0 },
+  { t: "usp v1.2.1 USP CPU", s: "% CPU in idle RX", u: "%", v: [98.7, 98.7, 0], d: 1 },
+  { t: "Wait behind hung TX", s: "seconds a command waits", u: " s", v: [9.9, 9.9, 0.0001], d: 1, fmt: (x) => x < 0.01 ? "0.1 ms" : x.toFixed(1) + " s" },
+  { t: "Code size", s: "lines, UspRadio + session", u: "", v: [920, 924, 638], d: 0 },
+];
+const tip = document.getElementById("tip");
+const NS = "http://www.w3.org/2000/svg";
+const mk = (tag, a, parent) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.append(e); return e; };
+function showTip(ev, html) { tip.innerHTML = html; tip.style.display = "block"; tip.style.left = (ev.clientX + 14) + "px"; tip.style.top = (ev.clientY + 14) + "px"; }
+function hideTip() { tip.style.display = "none"; }
+const fmtV = (m, x) => m.fmt ? m.fmt(x) : (m.d ? x.toFixed(m.d) : Math.round(x)) + m.u;
+
+const minis = document.getElementById("minis");
+METRICS.forEach((m) => {
+  const card = document.createElement("div"); card.className = "fig mini";
+  card.innerHTML = `<h3>${m.t}</h3><p>${m.s}</p>`;
+  const W = 190, H = 170, base = 140, top = 26, max = Math.max(...m.v) * 1.0 || 1;
+  const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": m.t });
+  mk("line", { x1: 0, y1: base, x2: W, y2: base, stroke: "var(--line)" }, svg);
+  const bw = 40, gap = (W - 3 * bw) / 4;
+  m.v.forEach((v, i) => {
+    const x = gap + i * (bw + gap);
+    const h = Math.max(v / max * (base - top), v > 0 ? 2 : 0);
+    const y = base - h;
+    if (h > 0) {
+      const r = Math.min(4, h);
+      mk("path", { d: `M${x},${base} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${base} Z`, fill: `var(--${OPTS[i].k})` }, svg);
+    }
+    const lbl = mk("text", { x: x + bw / 2, y: y - 6, "text-anchor": "middle", "font-size": 12, "font-weight": 600 }, svg);
+    lbl.textContent = v === 0 || v < 0.01 ? (m.fmt ? m.fmt(v) : "0") : fmtV(m, v);
+    const nm = mk("text", { x: x + bw / 2, y: base + 16, "text-anchor": "middle", "font-size": 10.5, class: "sec" }, svg);
+    nm.textContent = ["1", "3", "2"][i];
+    const hit = mk("rect", { x: x - gap / 2, y: 0, width: bw + gap, height: H, class: "hit" }, svg);
+    hit.addEventListener("mousemove", (ev) => showTip(ev, `<b>${OPTS[i].name}</b>${m.t}: ${fmtV(m, v)}`));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+  card.append(svg); minis.append(card);
+});
+const tbl = document.getElementById("tbl");
+tbl.innerHTML = `<tr><th>Metric</th>${OPTS.map((o) => `<th>${o.name}</th>`).join("")}</tr>` +
+  METRICS.map((m) => `<tr><td>${m.t} (${m.s})</td>${m.v.map((v) => `<td>${fmtV(m, v)}</td>`).join("")}</tr>`).join("");
+
+// cost line chart: loss vs burst
+function lineChart(id, xs, series, yMax, yLab, xLab) {
+  const svg = document.getElementById(id), L = 44, R = 440, T = 16, B = 190;
+  const X = (x) => L + (xs.indexOf(x)) / (xs.length - 1) * (R - L);
+  const Y = (y) => B - y / yMax * (B - T);
+  [0, yMax / 2, yMax].forEach((g) => { mk("line", { x1: L, x2: R, y1: Y(g), y2: Y(g), stroke: "var(--grid)" }, svg); const t = mk("text", { x: L - 6, y: Y(g) + 4, "text-anchor": "end", "font-size": 11, class: "mut" }, svg); t.textContent = g + yLab; });
+  xs.forEach((x) => { const t = mk("text", { x: X(x), y: B + 16, "text-anchor": "middle", "font-size": 11, class: "mut" }, svg); t.textContent = x; });
+  const xl = mk("text", { x: (L + R) / 2, y: B + 34, "text-anchor": "middle", "font-size": 11, class: "sec" }, svg); xl.textContent = xLab;
+  series.forEach((s) => {
+    mk("path", { d: s.v.map((v, i) => `${i ? "L" : "M"}${X(xs[i])},${Y(v)}`).join(""), fill: "none", stroke: `var(--${s.k})`, "stroke-width": 2 }, svg);
+    s.v.forEach((v, i) => {
+      mk("circle", { cx: X(xs[i]), cy: Y(v), r: 4.5, fill: `var(--${s.k})`, stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+      const hit = mk("circle", { cx: X(xs[i]), cy: Y(v), r: 14, class: "hit" }, svg);
+      hit.addEventListener("mousemove", (ev) => showTip(ev, `<b>${s.name}</b>${xs[i]} ${xLab.split(" (")[0]}: ${v}${yLab}`));
+      hit.addEventListener("mouseleave", hideTip);
+    });
+    const last = s.v.length - 1, lab = mk("text", { x: X(xs[last]) - 6, y: Y(s.v[last]) - 10, "text-anchor": "end", "font-size": 12, "font-weight": 600 }, svg);
+    lab.textContent = s.name;
+  });
+}
+lineChart("cost", ["0.3 ms", "5 ms", "20 ms", "50 ms"], [
+  { k: "opt2", name: "2 · Single queue", v: [0, 2, 3.5, 8] },
+  { k: "opt1", name: "1 · Today", v: [0, 0, 0, 0] },
+], 10, "%", "rateGroup1Hz burst length");
+
+// option 1 disturbance: horizontal bars
+(function () {
+  const svg = document.getElementById("cost2");
+  const rows = [
+    { n: "rateGroup1Hz", a: 16.1, b: 1.8 },
+    { n: "modeManager", a: 25.7, b: 2.1 },
+  ];
+  const L = 110, R = 330, max = 30, X = (v) => L + v / max * (R - L);
+  [0, 10, 20, 30].forEach((g) => { mk("line", { x1: X(g), x2: X(g), y1: 10, y2: 186, stroke: "var(--grid)" }, svg); const t = mk("text", { x: X(g), y: 202, "text-anchor": "middle", "font-size": 11, class: "mut" }, svg); t.textContent = g + " ms"; });
+  rows.forEach((r, i) => {
+    const y0 = 24 + i * 84;
+    const nm = mk("text", { x: L - 8, y: y0 + 26, "text-anchor": "end", "font-size": 12 }, svg); nm.textContent = r.n;
+    [["opt1", r.a, "1 · Today"], ["opt2", r.b, "2 · Single queue"]].forEach(([k, v, label], j) => {
+      const y = y0 + j * 26, w = X(v) - L;
+      mk("path", { d: `M${L},${y} H${L + w - 4} Q${L + w},${y} ${L + w},${y + 4} V${y + 16} Q${L + w},${y + 20} ${L + w - 4},${y + 20} H${L} Z`, fill: `var(--${k})` }, svg);
+      const t = mk("text", { x: L + w + 6, y: y + 15, "font-size": 11.5 }, svg); t.textContent = `${v} ms · ${label}`;
+      const hit = mk("rect", { x: L, y: y - 2, width: R - L, height: 24, class: "hit" }, svg);
+      hit.addEventListener("mousemove", (ev) => showTip(ev, `<b>${label}</b>${r.n} max delay: ${v} ms`));
+      hit.addEventListener("mouseleave", hideTip);
+    });
+  });
+  const xl = mk("text", { x: (L + R) / 2, y: 222, "text-anchor": "middle", "font-size": 11, class: "sec" }, svg); xl.textContent = "max added delay (ms)";
+})();
+</script>
+</body>
+</html>
