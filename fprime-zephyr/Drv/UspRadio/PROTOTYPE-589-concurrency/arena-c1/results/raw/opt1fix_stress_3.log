@@ -1,0 +1,19 @@
+OVERLAP	uspRadio(comp):fake_ral_set_standby	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_clear_irq_status	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+RESULT	opt1fix	stress	seconds	10.000
+RESULT	opt1fix	stress	cmds	219.000
+RESULT	opt1fix	stress	air_frames	2778.000
+RESULT	opt1fix	stress	frames_received_by_chip	41.000
+RESULT	opt1fix	stress	rx_duty_cycle	0.073
+RESULT	opt1fix	stress	dataOut	29.000
+RESULT	opt1fix	stress	tx_started	773.000
+RESULT	opt1fix	stress	tx_done	773.000
+RESULT	opt1fix	stress	send_failed_evr	0.000
+RESULT	opt1fix	stress	config_failed_evr	0.000
+RESULT	opt1fix	stress	change_deferred_evr	0.000
+RESULT	opt1fix	stress	ral_calls_overlapping_2_threads	4.000
+RESULT	opt1fix	stress	set_tx_while_chip_in_rx	0.000
+RESULT	opt1fix	stress	panics	0.000
+RESULT	opt1fix	stress	queue_high_water	4.000

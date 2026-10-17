@@ -1,0 +1,6 @@
+NOTE	opt3	init_fail	pre-opened RAC_HIGH_PRIORITY -> id 2; now startRadio()
+RESULT	opt3	init_fail	startRadio_ok_with_hook_pre_taken	1.000
+RESULT	opt3	init_fail	panics_part1	0.000
+RESULT	opt3	init_fail	dead_session_rc_rx	-16.000
+RESULT	opt3	init_fail	dead_session_panics_rx	0.000
+NOTE	opt3	init_fail	dead-session op rx: last panic at 

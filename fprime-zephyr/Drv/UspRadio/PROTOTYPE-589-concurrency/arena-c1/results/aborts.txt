@@ -1,0 +1,14 @@
+opt1_init_fail_apply.log:SMTC_MODEM_HAL_PANIC at smtc_rac_lock_radio_access:498 -> smtc_modem_hal_reset_mcu()
+opt1_init_fail_apply.log:EXIT	opt1	init_fail	rc=42
+opt1_init_fail_stop.log:SMTC_MODEM_HAL_PANIC at smtc_rac_abort_radio_submit:475 -> smtc_modem_hal_reset_mcu()
+opt1_init_fail_stop.log:EXIT	opt1	init_fail	rc=42
+opt1_init_fail_tx.log:SMTC_MODEM_HAL_PANIC at smtc_rac_lock_radio_access:498 -> smtc_modem_hal_reset_mcu()
+opt1_init_fail_tx.log:EXIT	opt1	init_fail	rc=42
+opt1_starve.log:FW_ASSERT queue full posting deferredTxPacket; component thread in 'deferredTxPacket' for 31886 us; queue: run run run run run run run run run run
+opt3_init_fail_apply.log:SMTC_MODEM_HAL_PANIC at smtc_rac_lock_radio_access:498 -> smtc_modem_hal_reset_mcu()
+opt3_init_fail_apply.log:EXIT	opt3	init_fail	rc=42
+opt3_init_fail_stop.log:SMTC_MODEM_HAL_PANIC at smtc_rac_abort_radio_submit:475 -> smtc_modem_hal_reset_mcu()
+opt3_init_fail_stop.log:EXIT	opt3	init_fail	rc=42
+opt3_init_fail_tx.log:SMTC_MODEM_HAL_PANIC at smtc_rac_lock_radio_access:498 -> smtc_modem_hal_reset_mcu()
+opt3_init_fail_tx.log:EXIT	opt3	init_fail	rc=42
+opt3_starve.log:FW_ASSERT queue full posting deferredTxPacket; component thread in 'deferredTxPacket' for 35349 us; queue: run run run run run run run run run run

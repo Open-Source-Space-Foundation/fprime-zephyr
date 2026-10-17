@@ -1,0 +1,6 @@
+#!/usr/bin/perl
+# tmo SECONDS CMD...: run CMD, kill it after SECONDS (macOS has no timeout(1)).
+my $t = shift; my $pid = fork();
+if ($pid == 0) { exec @ARGV or die "exec: $!"; }
+local $SIG{ALRM} = sub { kill 'KILL', $pid; print "TIMEOUT\t@ARGV\n"; exit 124; };
+alarm $t; waitpid($pid, 0); exit($? >> 8);

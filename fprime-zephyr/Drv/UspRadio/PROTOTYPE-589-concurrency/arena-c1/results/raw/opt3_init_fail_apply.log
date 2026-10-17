@@ -1,0 +1,5 @@
+NOTE	opt3	init_fail	pre-opened RAC_HIGH_PRIORITY -> id 2; now startRadio()
+RESULT	opt3	init_fail	startRadio_ok_with_hook_pre_taken	1.000
+RESULT	opt3	init_fail	panics_part1	0.000
+SMTC_MODEM_HAL_PANIC at smtc_rac_lock_radio_access:498 -> smtc_modem_hal_reset_mcu()
+EXIT	opt3	init_fail	rc=42

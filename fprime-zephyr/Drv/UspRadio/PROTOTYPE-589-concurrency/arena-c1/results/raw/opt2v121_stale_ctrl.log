@@ -1,0 +1,6 @@
+RESULT	opt2v121	stale_ctrl	confirms_without_frame	0.000
+RESULT	opt2v121	stale_ctrl	reverts	3.000
+RESULT	opt2v121	stale_ctrl	trials	3.000
+RESULT	opt2v121	stale_ctrl	old_frames_delivered	0.000
+RESULT	opt2v121	stale_ctrl	old_frames_dropped	0.000
+RESULT	opt2v121	stale_ctrl	chip_rx_sig_is_old_profile_at_end	1.000

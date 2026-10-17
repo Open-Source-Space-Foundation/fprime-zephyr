@@ -1,0 +1,12 @@
+RESULT	opt3	rearm	cycles	100.000
+RESULT	opt3	rearm	host_us_per_stop_rearm_mean	292.290
+RESULT	opt3	rearm	host_us_per_stop_rearm_max	307.000
+RESULT	opt3	rearm	cross_thread_sem_waits_per_cycle	2.000
+RESULT	opt3	rearm	k_sleeps_per_cycle	0.000
+RESULT	opt3	rearm	ral_calls_per_cycle	14.000
+RESULT	opt3	rearm	chip_in_rx_at_end	1.000
+RESULT	opt3	rearm	comp_mutex_holds	700.000
+RESULT	opt3	rearm	comp_mutex_max_hold_ral_calls	6.000
+RESULT	opt3	rearm	comp_mutex_max_hold_us_host	121.000
+RESULT	opt3	rearm	usp_mutex_holds	202.000
+RESULT	opt3	rearm	usp_mutex_max_hold_ral_calls	1.000

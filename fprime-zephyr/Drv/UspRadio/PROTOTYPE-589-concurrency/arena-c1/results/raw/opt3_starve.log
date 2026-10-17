@@ -1,0 +1,11 @@
+NOTE	opt3	starve	t=1s run posted=1 served=0 queue_high_water=1 tx_done=30
+NOTE	opt3	starve	t=2s run posted=2 served=0 queue_high_water=2 tx_done=62
+NOTE	opt3	starve	t=3s run posted=3 served=0 queue_high_water=3 tx_done=92
+NOTE	opt3	starve	t=4s run posted=4 served=0 queue_high_water=4 tx_done=123
+NOTE	opt3	starve	t=5s run posted=5 served=0 queue_high_water=5 tx_done=152
+NOTE	opt3	starve	t=6s run posted=6 served=0 queue_high_water=6 tx_done=183
+NOTE	opt3	starve	t=7s run posted=7 served=0 queue_high_water=7 tx_done=215
+NOTE	opt3	starve	t=8s run posted=8 served=0 queue_high_water=8 tx_done=245
+NOTE	opt3	starve	t=9s run posted=9 served=0 queue_high_water=9 tx_done=274
+NOTE	opt3	starve	t=10s run posted=10 served=0 queue_high_water=10 tx_done=304
+FW_ASSERT queue full posting deferredTxPacket; component thread in 'deferredTxPacket' for 35349 us; queue: run run run run run run run run run run

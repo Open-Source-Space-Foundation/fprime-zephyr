@@ -1,0 +1,22 @@
+arm-zephyr-eabi-g++ (Zephyr SDK 1.0.1) 14.3.0
+/Users/ossf-1/GitHut/arena-589/c1/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c1/sim/src/check_auto_type.cpp: In function 'int g(int)':
+/Users/ossf-1/GitHut/arena-589/c1/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c1/sim/src/check_auto_type.cpp:3:44: error: '__auto_type' was not declared in this scope
+    3 | #define SMTC_SW_PLATFORM( call ) ( { lk(); __auto_type __result = ( call ); ul(); __result; } )
+      |                                            ^~~~~~~~~~~
+/Users/ossf-1/GitHut/arena-589/c1/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c1/sim/src/check_auto_type.cpp:4:22: note: in expansion of macro 'SMTC_SW_PLATFORM'
+    4 | int g(int y){ return SMTC_SW_PLATFORM(f(y)); }
+      |                      ^~~~~~~~~~~~~~~~
+/Users/ossf-1/GitHut/arena-589/c1/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c1/sim/src/check_auto_type.cpp:3:83: error: '__result' was not declared in this scope
+    3 | #define SMTC_SW_PLATFORM( call ) ( { lk(); __auto_type __result = ( call ); ul(); __result; } )
+      |                                                                                   ^~~~~~~~
+/Users/ossf-1/GitHut/arena-589/c1/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c1/sim/src/check_auto_type.cpp:4:22: note: in expansion of macro 'SMTC_SW_PLATFORM'
+    4 | int g(int y){ return SMTC_SW_PLATFORM(f(y)); }
+      |                      ^~~~~~~~~~~~~~~~
+/Users/ossf-1/GitHut/arena-589/c1/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c1/sim/src/check_auto_type.cpp:3:34: error: void value not ignored as it ought to be
+    3 | #define SMTC_SW_PLATFORM( call ) ( { lk(); __auto_type __result = ( call ); ul(); __result; } )
+      |                                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/ossf-1/GitHut/arena-589/c1/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c1/sim/src/check_auto_type.cpp:4:22: note: in expansion of macro 'SMTC_SW_PLATFORM'
+    4 | int g(int y){ return SMTC_SW_PLATFORM(f(y)); }
+      |                      ^~~~~~~~~~~~~~~~
+GCC_CXX_AUTO_TYPE=error
+CLANG_CXX_AUTO_TYPE=ok

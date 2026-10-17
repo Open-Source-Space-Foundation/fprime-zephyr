@@ -1,0 +1,6 @@
+RESULT	opt1fix	stale	false_confirms	0.000
+RESULT	opt1fix	stale	reverts	10.000
+RESULT	opt1fix	stale	trials	10.000
+RESULT	opt1fix	stale	old_frames_delivered	10.000
+RESULT	opt1fix	stale	old_frames_dropped	0.000
+RESULT	opt1fix	stale	chip_rx_sig_is_old_profile_at_end	1.000

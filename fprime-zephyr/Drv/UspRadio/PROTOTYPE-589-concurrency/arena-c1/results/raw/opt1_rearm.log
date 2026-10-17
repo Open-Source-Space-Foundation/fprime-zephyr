@@ -1,0 +1,12 @@
+RESULT	opt1	rearm	cycles	100.000
+RESULT	opt1	rearm	host_us_per_stop_rearm_mean	294.010
+RESULT	opt1	rearm	host_us_per_stop_rearm_max	311.000
+RESULT	opt1	rearm	cross_thread_sem_waits_per_cycle	2.000
+RESULT	opt1	rearm	k_sleeps_per_cycle	0.000
+RESULT	opt1	rearm	ral_calls_per_cycle	14.000
+RESULT	opt1	rearm	chip_in_rx_at_end	1.000
+RESULT	opt1	rearm	comp_mutex_holds	600.000
+RESULT	opt1	rearm	comp_mutex_max_hold_ral_calls	0.000
+RESULT	opt1	rearm	comp_mutex_max_hold_us_host	2.000
+RESULT	opt1	rearm	usp_mutex_holds	405.000
+RESULT	opt1	rearm	usp_mutex_max_hold_ral_calls	1.000

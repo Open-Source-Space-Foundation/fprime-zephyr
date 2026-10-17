@@ -1,0 +1,117 @@
+diff --git a/fprime-zephyr/Drv/UspRadio/RalSession.hpp b/fprime-zephyr/Drv/UspRadio/RalSession.hpp
+index 8435c29..a4844dd 100644
+--- a/fprime-zephyr/Drv/UspRadio/RalSession.hpp
++++ b/fprime-zephyr/Drv/UspRadio/RalSession.hpp
+@@ -94,6 +94,11 @@ class RalSession {
+ 
+     //! Register the RX done callback before calling startReceive().
+     virtual void setCallbacks(RxDoneCallback rxDone) = 0;
++
++    //! Count of RX arms launched so far (incremented in the RX pre-callback,
++    //! i.e. when the chip is actually put into RX on the newly applied
++    //! profile).  A frame harvested under arm N was received on arm N's profile.
++    virtual uint32_t rxArmEpoch() const = 0;
+ };
+ 
+ }  // namespace Zephyr
+diff --git a/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp b/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp
+index 6931b9c..1f62550 100644
+--- a/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp
++++ b/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp
+@@ -315,6 +315,7 @@ void RalSessionImpl::onPreRx(void) {
+         RAL_IRQ_RX_DONE | RAL_IRQ_RX_TIMEOUT | RAL_IRQ_RX_CRC_ERROR);
+     ral_cfg_rx_boosted(self->m_ral, true);
+     ral_set_rx(self->m_ral, RAL_RX_TIMEOUT_CONTINUOUS_MODE);
++    self->m_rxArmEpoch.fetch_add(1, std::memory_order_release);
+     // Lock stays held — the USP thread will service DIO1 edges via onPostRx.
+     // stopRadio() aborts via smtc_rac_unlock_radio_access → onPostRx(RADIO_UNLOCKED).
+ }
+diff --git a/fprime-zephyr/Drv/UspRadio/RalSessionImpl.hpp b/fprime-zephyr/Drv/UspRadio/RalSessionImpl.hpp
+index 44a66ad..9d8fb96 100644
+--- a/fprime-zephyr/Drv/UspRadio/RalSessionImpl.hpp
++++ b/fprime-zephyr/Drv/UspRadio/RalSessionImpl.hpp
+@@ -26,6 +26,7 @@ extern "C" {
+ }
+ 
+ #include <zephyr/kernel.h>
++#include <atomic>
+ 
+ namespace Zephyr {
+ 
+@@ -45,6 +46,7 @@ class RalSessionImpl final : public RalSession {
+     int startCw() override;
+     int stopRadio() override;
+     void setCallbacks(RxDoneCallback rxDone) override;
++    uint32_t rxArmEpoch() const override { return m_rxArmEpoch.load(std::memory_order_acquire); }
+ 
+   private:
+     //! Force the transceiver to STDBY_XOSC with IRQs cleared (chip-level
+@@ -109,6 +111,7 @@ class RalSessionImpl final : public RalSession {
+     bool            m_initialized;
+ 
+     RxDoneCallback  m_rxDone;
++    std::atomic<uint32_t> m_rxArmEpoch{0};
+ 
+     // Per-operation scratch (valid only while an operation is in-flight)
+     TxScratch    m_txScratch;
+diff --git a/fprime-zephyr/Drv/UspRadio/UspRadio.cpp b/fprime-zephyr/Drv/UspRadio/UspRadio.cpp
+index c1c5840..41ff75c 100644
+--- a/fprime-zephyr/Drv/UspRadio/UspRadio.cpp
++++ b/fprime-zephyr/Drv/UspRadio/UspRadio.cpp
+@@ -128,6 +128,7 @@ void UspRadio::onRxDone(const uint8_t* data, std::size_t size, int16_t rssi, int
+     slot.len  = safeSize;
+     slot.rssi = rssi;
+     slot.snr  = snr;
++    slot.epoch = m_session->rxArmEpoch();  // USP thread, inside the arm's callback
+     // Publish the slot before the message can be consumed.
+     m_rxHead.store(head + 1, std::memory_order_release);
+ 
+@@ -213,8 +214,13 @@ void UspRadio::deferredRxDone_internalInterfaceHandler() {
+     }
+     const RxSlot& slot = m_rxRing[tail % RX_RING_DEPTH];
+ 
+-    // Notify ProfilePolicy that a frame was received
+-    ProfilePolicy::Action action = m_policy.frameReceived();
++    // Notify ProfilePolicy that a frame was received -- but only a frame from
++    // an arm that was listening on the pending profile can confirm it.  A
++    // frame harvested before that arm (old profile) is delivered, not counted.
++    const bool fromPendingArm = !m_policy.hasPendingRx() ||
++        (static_cast<I32>(slot.epoch - m_pendingArmEpoch) >= 0 && m_pendingArmEpoch != 0);
++    ProfilePolicy::Action action =
++        fromPendingArm ? m_policy.frameReceived() : ProfilePolicy::Action::kNoOp;
+     if (action == ProfilePolicy::Action::kConfirmRx) {
+         this->log_ACTIVITY_LO_ProfileConfirmed(
+             static_cast<LinkProfileId::T>(m_policy.rxProfile()));
+@@ -546,6 +552,8 @@ void UspRadio::deferredSetRxProfile_internalInterfaceHandler(const LinkProfileId
+         m_revertRearmPending = false;
+         return;
+     }
++    // A new pending profile: no arm has listened on it yet.
++    m_pendingArmEpoch = 0;
+     // kApplyRx — stop RX, apply the new profile, re-arm RX (RAC ALREADY_RUNNING
+     // guard — see deferredTxPacket).  On stop failure skip the apply: pending
+     // profile + revert deadline stay untouched, so the auto-revert still fires
+@@ -657,6 +665,9 @@ bool UspRadio::rearmRx() {
+         this->log_WARNING_HI_ConfigurationFailed(UspRadioDirection::RX);
+         return false;
+     }
++    if (m_policy.hasPendingRx()) {
++        m_pendingArmEpoch = m_session->rxArmEpoch();  // onPreRx ran inline or will run next
++    }
+     return true;
+ }
+ 
+diff --git a/fprime-zephyr/Drv/UspRadio/UspRadio.hpp b/fprime-zephyr/Drv/UspRadio/UspRadio.hpp
+index 2484cbc..8e79659 100644
+--- a/fprime-zephyr/Drv/UspRadio/UspRadio.hpp
++++ b/fprime-zephyr/Drv/UspRadio/UspRadio.hpp
+@@ -191,7 +191,9 @@ class UspRadio final : public UspRadioComponentBase {
+         FwSizeType len;
+         I16        rssi;
+         I8         snr;
++        U32        epoch;  //!< RalSession::rxArmEpoch() when harvested
+     };
++    U32               m_pendingArmEpoch = 0;  //!< arm that put the pending profile on the chip
+     RxSlot            m_rxRing[RX_RING_DEPTH];
+     std::atomic<U32>  m_rxHead;      //!< next slot to write (producer-owned)
+     std::atomic<U32>  m_rxTail;      //!< next slot to read (consumer-owned)

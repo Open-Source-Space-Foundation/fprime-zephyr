@@ -1,0 +1,17 @@
+RESULT	opt3	txsat	frames	40.000
+RESULT	opt3	txsat	tx_done	40.000
+RESULT	opt3	txsat	ms_per_frame	34.751
+RESULT	opt3	txsat	overhead_ms_per_frame_beyond_airtime	9.751
+RESULT	opt3	txsat	rx_duty_cycle	0.044
+RESULT	opt3	txsat	rx_arms_per_frame	0.025
+RESULT	opt3	txsat	ral_calls_per_frame	16.300
+RESULT	opt3	txsat	comp_thread_blocking_sem_waits_per_frame	2.050
+RESULT	opt3	txsat	comp_thread_sem_wait_ms_per_frame	31.403
+RESULT	opt3	txsat	comp_thread_k_sleeps_per_frame	1.100
+RESULT	opt3	txsat	comp_thread_k_sleep_ms_per_frame	1.578
+RESULT	opt3	txsat	set_tx_while_chip_in_rx	0.000
+RESULT	opt3	txsat	comp_mutex_holds	204.000
+RESULT	opt3	txsat	comp_mutex_max_hold_ral_calls	6.000
+RESULT	opt3	txsat	comp_mutex_max_hold_us_host	122.000
+RESULT	opt3	txsat	usp_mutex_holds	164.000
+RESULT	opt3	txsat	usp_mutex_max_hold_ral_calls	2.000

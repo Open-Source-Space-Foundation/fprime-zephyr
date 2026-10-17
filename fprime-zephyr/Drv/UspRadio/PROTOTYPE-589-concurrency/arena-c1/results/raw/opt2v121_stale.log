@@ -1,0 +1,6 @@
+RESULT	opt2v121	stale	false_confirms	0.000
+RESULT	opt2v121	stale	reverts	10.000
+RESULT	opt2v121	stale	trials	10.000
+RESULT	opt2v121	stale	old_frames_delivered	0.000
+RESULT	opt2v121	stale	old_frames_dropped	10.000
+RESULT	opt2v121	stale	chip_rx_sig_is_old_profile_at_end	1.000

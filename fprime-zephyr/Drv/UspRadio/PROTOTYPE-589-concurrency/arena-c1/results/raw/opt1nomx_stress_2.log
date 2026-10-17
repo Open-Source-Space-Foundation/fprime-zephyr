@@ -1,0 +1,33 @@
+OVERLAP	uspRadio(comp):fake_ral_set_standby	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_standby	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_clear_irq_status	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_pkt_type	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_lora_mod_params	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_lora_pkt_params	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_lora_sync_word	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_rf_freq	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_tx_cfg	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	usp_main_thread:fake_ral_set_sleep	while	usp_main_thread:fake_ral_set_sleep
+OVERLAP	uspRadio(comp):fake_ral_set_standby	while	usp_main_thread:fake_ral_set_sleep
+RESULT	opt1nomx	stress	seconds	10.000
+RESULT	opt1nomx	stress	cmds	218.000
+RESULT	opt1nomx	stress	air_frames	2754.000
+RESULT	opt1nomx	stress	frames_received_by_chip	34.000
+RESULT	opt1nomx	stress	rx_duty_cycle	0.075
+RESULT	opt1nomx	stress	dataOut	28.000
+RESULT	opt1nomx	stress	tx_started	759.000
+RESULT	opt1nomx	stress	tx_done	759.000
+RESULT	opt1nomx	stress	send_failed_evr	0.000
+RESULT	opt1nomx	stress	config_failed_evr	0.000
+RESULT	opt1nomx	stress	change_deferred_evr	0.000
+RESULT	opt1nomx	stress	ral_calls_overlapping_2_threads	18.000
+RESULT	opt1nomx	stress	set_tx_while_chip_in_rx	0.000
+RESULT	opt1nomx	stress	panics	0.000
+RESULT	opt1nomx	stress	queue_high_water	4.000

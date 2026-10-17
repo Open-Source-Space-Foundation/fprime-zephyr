@@ -1,0 +1,9 @@
+RESULT	opt2v121	busyloop	chip_in_rx	1.000
+RESULT	opt2v121	busyloop	engine_passes_per_s_idle_rx	0.000
+RESULT	opt2v121	busyloop	engine_spins_per_s_idle_rx	0.000
+RESULT	opt2v121	busyloop	process_cpu_fraction_idle_rx	0.000
+RESULT	opt2v121	busyloop	engine_kicks	0.000
+RESULT	opt2v121	busyloop	engine_passes_per_s_after_1_frame	0.000
+RESULT	opt2v121	busyloop	engine_spins_per_s_after_1_frame	0.000
+RESULT	opt2v121	busyloop	process_cpu_fraction_after_1_frame	0.000
+RESULT	opt2v121	busyloop	rx_frames_delivered_of_10	10.000

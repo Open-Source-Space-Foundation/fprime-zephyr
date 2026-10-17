@@ -1,0 +1,16 @@
+NOTE	opt2	starve	t=1s run posted=1 served=0 queue_high_water=2 tx_done=31
+NOTE	opt2	starve	t=2s run posted=2 served=1 queue_high_water=2 tx_done=62
+NOTE	opt2	starve	t=3s run posted=3 served=2 queue_high_water=2 tx_done=92
+NOTE	opt2	starve	t=4s run posted=4 served=3 queue_high_water=2 tx_done=123
+NOTE	opt2	starve	t=5s run posted=5 served=4 queue_high_water=2 tx_done=153
+NOTE	opt2	starve	t=6s run posted=6 served=5 queue_high_water=2 tx_done=184
+NOTE	opt2	starve	t=7s run posted=7 served=6 queue_high_water=2 tx_done=215
+NOTE	opt2	starve	t=8s run posted=8 served=7 queue_high_water=2 tx_done=246
+NOTE	opt2	starve	t=9s run posted=9 served=8 queue_high_water=2 tx_done=277
+NOTE	opt2	starve	t=10s run posted=10 served=9 queue_high_water=2 tx_done=307
+NOTE	opt2	starve	t=11s run posted=11 served=10 queue_high_water=2 tx_done=339
+NOTE	opt2	starve	t=12s run posted=12 served=11 queue_high_water=2 tx_done=371
+RESULT	opt2	starve	run_posted	12.000
+RESULT	opt2	starve	run_served	12.000
+RESULT	opt2	starve	tx_done	371.000
+RESULT	opt2	starve	queue_high_water	2.000
