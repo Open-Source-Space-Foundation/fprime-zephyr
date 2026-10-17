@@ -1,0 +1,24 @@
+PROTOTYPE #589 (throwaway, not built). Port changes for option 2, single-queue
+UspRadio, against fix/uspradio-integration-c123 UspRadio.fpp.
+
+  -        @ Internal port - RX done (fires from USP callback; runs on component thread).
+  -        internal port deferredRxDone priority 10
+  +        @ Engine kick: the USP event semaphore was given (DIO1 edge or RAC timer).
+  +        @ Posted by the kick pump, coalesced to at most one queued at a time.
+  +        @ The handler runs smtc_rac_run_engine() here, on the component thread,
+  +        @ so every RAC post-callback runs on this thread too.
+  +        internal port engineKick priority 10
+
+   (deferredTxPacket, deferredTransmitCmd, deferredSetTxProfile,
+    deferredSetRxProfile, deferredContinuousWave: unchanged)
+
+   async input port run: Svc.Sched          # unchanged from #26 (async)
+                                             # also polls the CW deadline now
+
+Net: -1 internal port, +1 internal port.  Same external ports, commands,
+events and telemetry.  dataIn stays sync (Svc.Com fixes it), but its handler
+only enqueues: no atomics on the caller thread.
+
+Kconfig (board defconfig):
+  -CONFIG_USP_MAIN_THREAD=y
+  +# no USP thread: UspRadio's component thread runs the RAC engine

@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE #589: UspRadio concurrency model</title>
+<style>
+  :root { --accent: #3b5bdb; --bad: #c92a2a; --ok: #2b8a3e; --muted: #6b7280; --line: #e5e7eb; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif; margin: 0; color: #111827; background: #fafafa; }
+  main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 28px 0 10px; }
+  p.lead { margin: 0 0 6px; max-width: 900px; }
+  .proto { display: inline-block; font-size: 12px; background: #fff3bf; padding: 2px 8px; border-radius: 4px; margin-bottom: 10px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button { border: 1px solid var(--line); background: #fff; padding: 7px 12px; border-radius: 6px; cursor: pointer; font: inherit; }
+  .tabs button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .optdesc { color: var(--muted); margin: 8px 0 0; max-width: 900px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .card h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-weight: 500; }
+  dd.changed { color: var(--accent); }
+  .chips span { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; margin: 0 4px 4px 0; font-size: 13px; background: #f8f9fa; }
+  .empty { color: var(--muted); font-style: italic; }
+  .alarm { color: var(--bad); font-weight: 600; margin: 4px 0; }
+  .okline { color: var(--ok); margin: 4px 0; }
+  .actions button, .steps button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 6px 10px; margin: 0 6px 6px 0; cursor: pointer; text-align: left; }
+  .actions button:hover, .steps button:hover:not(:disabled) { border-color: var(--accent); }
+  .steps button { display: block; width: 100%; }
+  .steps button.next { border-color: var(--accent); background: #edf2ff; }
+  .steps button:disabled { color: #9ca3af; cursor: default; }
+  .log { font: 13px/1.45 ui-monospace, Menlo, monospace; max-height: 320px; overflow: auto; }
+  .log div { padding: 2px 0; border-bottom: 1px dashed #f1f3f5; }
+  .who { display: inline-block; min-width: 132px; color: var(--muted); }
+  .who.usp { color: #9c36b5; } .who.comp { color: var(--accent); } .who.caller { color: #e67700; } .who.chip { color: #0b7285; }
+  .log .bad { color: var(--bad); font-weight: 600; }
+  .scen { display: grid; grid-template-columns: 360px 1fr; gap: 14px; }
+  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #f8f9fa; font-weight: 600; }
+  td.y { color: var(--ok); font-weight: 600; } td.n { color: var(--bad); font-weight: 600; } td.g { color: #e67700; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="proto">PROTOTYPE for wayfinder ticket #589. Throwaway, not flight code.</div>
+  <h1>Which concurrency model should UspRadio use?</h1>
+  <p class="lead">The question: if every radio and profile change runs on one thread, do the known UspRadio defects become impossible,
+  and what does that cost? Pick an option, then run a scenario. The same button sequence runs against each option, so you can
+  compare outcomes. The state panel shows what the radio, the profile policy and the downlink pipeline believe after each step.</p>
+
+  <h2>Option</h2>
+  <div class="tabs" id="opttabs"></div>
+  <p class="optdesc" id="optdesc"></p>
+
+  <h2>State</h2>
+  <div class="grid" id="state"></div>
+
+  <h2>Scenarios</h2>
+  <div class="tabs" id="scentabs"></div>
+  <div class="scen" style="margin-top:12px">
+    <div class="card">
+      <h3 id="scentitle"></h3>
+      <p id="scendesc" style="margin-top:0"></p>
+      <div class="steps" id="steps"></div>
+      <button onclick="startScenario(curScen)" style="margin-top:6px;font:inherit;border:0;background:none;color:var(--accent);cursor:pointer;padding:0">Restart this scenario</button>
+    </div>
+    <div class="card"><h3>What happened, by thread</h3><div class="log" id="log"></div></div>
+  </div>
+
+  <h2>Free play</h2>
+  <div class="card actions" id="actions"></div>
+
+  <h2>Side by side</h2>
+  <table>
+    <tr><th></th><th>1 · #14 + #26 fixes (fork mutex)</th><th>2 · Single queue (no USP thread)</th><th>3 · #14 + #26 on upstream mutex mode</th></tr>
+    <tr><td>Threads in the RAC</td><td>2 (USP prio 2 + component)</td><td>1 (component), plus a kick pump that only posts</td><td>2, serialized by <code>rac_api_mutex</code></td></tr>
+    <tr><td>Code lines, UspRadio + RalSession (no comments)</td><td>920 (measured, #26 head)</td><td>~690 (estimate: 364 sketched + ~325 unchanged)</td><td>~927 (#26 + 27/−20 diff)</td></tr>
+    <tr><td>k_sem take/give · atomics · k_sleep · tasks[] reads</td><td>16 · 26 · 4 · 8</td><td>1 · 3 · 0 · 0</td><td>16 · 26 · 4 · 8 (reads now locked)</td></tr>
+    <tr><td>Port changes vs #26</td><td>none</td><td>internal <code>deferredRxDone</code> → <code>engineKick</code>; Kconfig <code>USP_MAIN_THREAD=n</code></td><td>none; Kconfig <code>USP_THREADS_MUTEXES=y</code></td></tr>
+    <tr><td>usp_zephyr fork RAC-mutex commit</td><td class="n">needed, and still misses <code>lock_radio_access</code></td><td class="y">dropped</td><td class="y">dropped</td></tr>
+    <tr><td>Revert on the rate-group thread</td><td class="g">fixed by a rule (async run)</td><td class="y">impossible: one thread</td><td class="g">fixed by a rule</td></tr>
+    <tr><td>RX re-armed on the wrong profile</td><td class="g">fixed by a rule (always call rearmRx)</td><td class="y">impossible: <code>armRx(profile)</code> applies in the same lock window</td><td class="g">fixed by a rule</td></tr>
+    <tr><td>Double comStatus into ComQueue</td><td class="g">guarded: atomic flag written by 2 threads</td><td class="y">impossible: one 3-state field, emits only on edges into CREDIT_OUT</td><td class="g">guarded</td></tr>
+    <tr><td>Stale-frame false confirm (scenario A)</td><td class="n">open</td><td class="y">impossible: no ring; frames are read only during the current arm</td><td class="n">open</td></tr>
+    <tr><td><code>tasks[0xFF]</code> read after failed init (B)</td><td class="n">open (fixable with a guard)</td><td class="y">refused: every op passes <code>stop()</code>'s ready gate</td><td class="n">open (fixable with a guard)</td></tr>
+    <tr><td><code>lock_radio_access</code> / quiesce race the engine (E)</td><td class="n">open</td><td class="y">impossible</td><td class="y">closed by the mutex</td></tr>
+    <tr><td>usp v1.2.1 USP-thread busy-loop (F)</td><td class="n">exposed</td><td class="y">not exposed</td><td class="n">exposed, and the loop retakes the mutex</td></tr>
+    <tr><td>Queue blocked during TX (≤10 s) and CW (N s)</td><td class="n">yes</td><td class="y">no: TX completes on a kick, CW ends on a run tick</td><td class="n">yes</td></tr>
+    <tr><td>New risk</td><td>none</td><td class="n">RX service waits behind the component queue (G); TX path becomes asynchronous; skipping the per-frame re-arm is no longer worth it (bench P3 saturation)</td><td class="n">priority inversion on the mutex; inferred, needs a bench check</td></tr>
+  </table>
+</main>
+
+<script>
+// ===================================================================
+// Portable logic module: pure. createState(option) and step(state, action).
+// No DOM below this line until the PAGE section.
+// ===================================================================
+const OPTIONS = {
+  1: { name: "1 · #14 + #26 fixes", desc: "Today's code. The USP thread (prio 2) runs the RAC engine and harvests RX frames into a 4-slot ring. The component thread runs commands, TX, profile changes and reverts. A mutex patched into the usp_zephyr fork protects the engine pass, but not smtc_rac_lock_radio_access()." },
+  2: { name: "2 · Single queue", desc: "CONFIG_USP_MAIN_THREAD=n. The component thread runs the RAC engine itself whenever an engineKick message reaches the front of its queue. DIO1 and the RAC timer only give a semaphore, which a tiny pump turns into one kick. TX starts and returns; TX_DONE arrives as a later kick." },
+  3: { name: "3 · Upstream mutex mode", desc: "Same code as option 1, but on usp_zephyr's documented CONFIG_USP_THREADS_MUTEXES=y. Every caller-side RAC call, the quiesce SPI and the tasks[] reads are wrapped in rac_api_mutex. The fork's mutex commit is dropped." },
+};
+
+function createState(option) {
+  return {
+    option,
+    queue: [],                // component thread's message queue (FIFO)
+    ring: [],                 // options 1/3: frames the USP thread harvested
+    fifo: null,               // option 2: frame waiting in the chip FIFO for an engine pass
+    kickQueued: false,
+    chip: { mode: "RX", profile: "P0", txDone: false },
+    policy: { committed: "P0", pending: null },
+    txProfile: "P0",
+    transmit: "ENABLED",
+    comQueue: "READY",        // Svc::ComQueue: READY = holds a SUCCESS, will send a frame
+    owed: true,               // options 1/3: m_comStatusOwed
+    link: "CREDIT_OUT",       // option 2: NO_CREDIT | CREDIT_OUT | FRAME_HELD
+    radioReady: true,
+    delivered: 0,
+    alarms: [],
+    log: [],
+  };
+}
+
+const armed = (s) => s.policy.pending || s.policy.committed;
+const say = (s, who, text, bad) => s.log.push({ who, text, bad: !!bad });
+const alarm = (s, text) => { s.alarms.push(text); say(s, "", text, true); };
+const USP = (s) => (s.option === 2 ? "kick pump" : "USP thread");
+
+function comStatusToComQueue(s) {
+  if (s.comQueue === "READY") {
+    alarm(s, "FW_ASSERT in Svc::ComQueue: a second SUCCESS while READY. FatalHandler reboots.");
+  } else {
+    s.comQueue = "READY";
+    say(s, "component", "comStatus SUCCESS → ComQueue READY (it may send the next frame)");
+  }
+}
+
+// ---- option 1/3 (#14 + #26) component handlers --------------------------
+function rearm13(s, why) {
+  s.chip = { mode: "RX", profile: armed(s), txDone: false };
+  say(s, "component", `stopRadio + rearmRx: chip listens on ${armed(s)} (${why})`);
+}
+
+function handle13(s, m) {
+  if (m.type === "SET_RX_PROFILE") {
+    if (!s.radioReady) {
+      alarm(s, "stopRadio() reads rp->tasks[m_radio_id] with m_radio_id = 0xFF: out-of-bounds read of the radio planner.");
+      return;
+    }
+    if (m.profile !== s.policy.committed) s.policy.pending = m.profile;
+    rearm13(s, `SET_RX_PROFILE ${m.profile}, awaiting a confirming frame`);
+    if (s.ring.length) say(s, "component", `${s.ring.length} frame(s) from the old arm still sit in the RX ring`);
+  } else if (m.type === "RX_DONE") {
+    const slot = s.ring.shift();
+    if (!slot) return;
+    if (s.policy.pending) {
+      const p = s.policy.pending;
+      s.policy.committed = p; s.policy.pending = null;
+      if (slot.profile !== p) {
+        alarm(s, `False confirm: ${p} committed using a frame received on ${slot.profile}. The anti-lockout revert is now disarmed.`);
+      } else {
+        say(s, "component", `frame on ${p} confirms ${p}`);
+      }
+    }
+    s.delivered++;
+    say(s, "component", `deliver frame (received on ${slot.profile}) to the deframer`);
+  } else if (m.type === "TX_PACKET") {
+    if (s.transmit === "ENABLED") {
+      s.chip = { mode: "TX", profile: s.txProfile, txDone: false };
+      say(s, "component", `transmit on ${s.txProfile}: the component thread blocks until TX_DONE (up to 10 s on a hung chip)`);
+      say(s, "chip", "TX_DONE");
+    } else if (s.transmit === "DISABLING") {
+      s.transmit = "DISABLED";
+      say(s, "component", "trailing frame dropped: DISABLING → DISABLED");
+    } else {
+      say(s, "component", "frame dropped (TX disabled), pipeline kept alive");
+    }
+    s.owed = true;
+    comStatusToComQueue(s);
+    rearm13(s, "after the frame");
+  } else if (m.type === "TRANSMIT") {
+    if (m.value === "ENABLED") {
+      if (s.transmit === "DISABLED" && !s.owed) {
+        s.owed = true;
+        say(s, "component", "prime: m_comStatusOwed was false, emit SUCCESS");
+        comStatusToComQueue(s);
+      } else {
+        say(s, "component", `prime skipped (transmit=${s.transmit}, m_comStatusOwed=${s.owed})`);
+      }
+      s.transmit = "ENABLED";
+    } else if (s.transmit === "ENABLED") {
+      s.transmit = "DISABLING";
+      say(s, "component", "TRANSMIT DISABLED: ENABLED → DISABLING (waits for a trailing frame)");
+    } else {
+      s.transmit = "DISABLED";
+      rearm13(s, "TRANSMIT DISABLED recover-RX lever");
+    }
+  } else if (m.type === "RUN") {
+    if (s.policy.pending) {
+      say(s, "component", `revert deadline: ${s.policy.pending} never confirmed, revert to ${s.policy.committed}`);
+      s.policy.pending = null;
+      rearm13(s, "revert");
+    } else {
+      say(s, "component", `revert deadline: nothing pending (committed ${s.policy.committed}), no revert`);
+    }
+  }
+}
+
+// ---- option 2 (single queue) component handlers -------------------------
+function rearmWhenIdle(s, why) {
+  if (s.link === "FRAME_HELD") {
+    say(s, "component", `${why}: TX in flight, re-arm deferred to TX done (the TX is not aborted)`);
+    return;
+  }
+  if (s.fifo) say(s, "component", `stop(): the unread frame in the FIFO (old ${s.fifo.profile} arm) is discarded with that arm`);
+  s.fifo = null;
+  s.chip = { mode: "RX", profile: armed(s), txDone: false };
+  say(s, "component", `armRx(${armed(s)}): stop, apply ${armed(s)} and arm, all in one lock window (${why})`);
+}
+
+function emitCredit(s) {
+  if (s.link === "CREDIT_OUT") { alarm(s, "unreachable: emitCredit from CREDIT_OUT"); return; }
+  s.link = "CREDIT_OUT";
+  comStatusToComQueue(s);
+}
+
+function finishFrame(s) {
+  say(s, "component", "finishFrame: return buffer, FRAME_HELD → CREDIT_OUT");
+  emitCredit(s);
+  rearmWhenIdle(s, "after the frame");
+}
+
+function handle2(s, m) {
+  if (!s.radioReady && m.type !== "TRANSMIT" && m.type !== "TX_PACKET") {
+    say(s, "component", `${m.type}: session not ready → -ENODEV, ConfigurationFailed event. Nothing reads tasks[].`);
+    return;
+  }
+  if (m.type === "SET_RX_PROFILE") {
+    if (m.profile !== s.policy.committed) s.policy.pending = m.profile;
+    rearmWhenIdle(s, `SET_RX_PROFILE ${m.profile}`);
+  } else if (m.type === "ENGINE_KICK") {
+    s.kickQueued = false;
+    say(s, "component", "engineKick: run the RAC engine here");
+    let did = false;
+    if (s.chip.txDone) {
+      did = true;
+      s.chip.txDone = false;
+      say(s, "component", "engine: TX task finished → txDone(0)");
+      s.chip.mode = "STBY";
+      finishFrame(s);
+    }
+    if (s.fifo && s.chip.mode === "RX") {
+      did = true;
+      const f = s.fifo; s.fifo = null;
+      if (s.policy.pending) {
+        const p = s.policy.pending;
+        if (f.profile !== p) alarm(s, "unreachable in this model: frame from another arm");
+        s.policy.committed = p; s.policy.pending = null;
+        say(s, "component", `frame read during the ${p} arm confirms ${p}`);
+      }
+      s.delivered++;
+      say(s, "component", `deliver frame (received on ${f.profile}) to the deframer`);
+    } else if (!did) {
+      say(s, "component", "engine: nothing to read (the old arm's IRQ was cleared by stop)");
+    }
+  } else if (m.type === "TX_PACKET") {
+    s.link = "FRAME_HELD";
+    if (s.transmit !== "ENABLED" || !s.radioReady) {
+      if (s.transmit === "DISABLING") s.transmit = "DISABLED";
+      say(s, "component", "frame dropped (TX not enabled), pipeline kept alive");
+      finishFrame(s);
+      return;
+    }
+    s.fifo = null;
+    s.chip = { mode: "TX", profile: s.txProfile, txDone: false };
+    say(s, "component", `startTx(${s.txProfile}): returns once the chip is transmitting; the thread is free`);
+  } else if (m.type === "TRANSMIT") {
+    if (m.value === "ENABLED") {
+      if (s.link === "NO_CREDIT") emitCredit(s);
+      else say(s, "component", `prime: link is ${s.link}, nothing to emit`);
+      s.transmit = "ENABLED";
+    } else {
+      s.transmit = s.link === "FRAME_HELD" ? "DISABLING" : "DISABLED";
+      say(s, "component", `TRANSMIT DISABLED → ${s.transmit}`);
+      rearmWhenIdle(s, "recover-RX lever");
+    }
+  } else if (m.type === "RUN") {
+    if (s.policy.pending) {
+      say(s, "component", `revert deadline: ${s.policy.pending} never confirmed, revert to ${s.policy.committed}`);
+      s.policy.pending = null;
+      rearmWhenIdle(s, "revert");
+    } else {
+      say(s, "component", `revert deadline: nothing pending (committed ${s.policy.committed}), no revert`);
+    }
+  }
+}
+
+// ---- actions --------------------------------------------------------------
+function step(prev, action) {
+  const s = structuredClone(prev);
+  s.log = []; // per-step log; the page accumulates it
+  const q = (m, who, text) => { s.queue.push(m); say(s, who, text); };
+  switch (action.type) {
+    case "groundSetRx":
+      q({ type: "SET_RX_PROFILE", profile: action.profile }, "ground", `SET_RX_PROFILE ${action.profile} (revert 60 s) queued`);
+      break;
+    case "groundTransmit":
+      q({ type: "TRANSMIT", value: action.value }, "ground", `TRANSMIT ${action.value} queued`);
+      break;
+    case "airFrame": {
+      const p = action.profile;
+      if (s.chip.mode !== "RX" || s.chip.profile !== p) {
+        say(s, "chip", `frame on ${p} lost: chip is ${s.chip.mode === "RX" ? "listening on " + s.chip.profile : s.chip.mode}`);
+        break;
+      }
+      if (s.option === 2) {
+        if (s.fifo) alarm(s, "Frame lost: a second frame overwrote the FIFO before the queue reached the kick.");
+        s.fifo = { profile: p };
+        say(s, "chip", `frame on ${p} received; DIO1 → event semaphore`);
+        if (!s.kickQueued) { s.kickQueued = true; q({ type: "ENGINE_KICK" }, "kick pump", "engineKick queued"); }
+        else say(s, "kick pump", "kick already queued, coalesced");
+      } else {
+        if (s.ring.length >= 4) { alarm(s, "RX ring full: frame dropped"); break; }
+        s.ring.push({ profile: p });
+        say(s, "chip", `frame on ${p} received; DIO1`);
+        q({ type: "RX_DONE" }, "USP thread", `engine pass harvests it into the ring (tagged nothing), RX_DONE queued`);
+      }
+      break;
+    }
+    case "comQueueSends":
+      if (s.comQueue !== "READY") { say(s, "ComQueue", "no SUCCESS in hand: holds the frame"); break; }
+      s.comQueue = "WAITING";
+      if (s.option !== 2) { s.owed = false; say(s, "caller thread", "dataIn: m_comStatusOwed = false (atomic, ComQueue's thread)"); }
+      q({ type: "TX_PACKET" }, "caller thread", "dataIn → frame queued");
+      break;
+    case "txDoneIrq":
+      if (s.option !== 2) { say(s, "chip", "(options 1/3: TX_DONE was already consumed inside the blocking TX handler)"); break; }
+      if (s.chip.mode !== "TX") { say(s, "chip", "no TX in flight"); break; }
+      s.chip.txDone = true;
+      say(s, "chip", "TX_DONE; DIO1 → event semaphore");
+      if (!s.kickQueued) { s.kickQueued = true; q({ type: "ENGINE_KICK" }, "kick pump", "engineKick queued"); }
+      break;
+    case "revertDeadline":
+      q({ type: "RUN" }, "rate group", "60 s pass; run tick queued (async port)");
+      break;
+    case "bootInitFails":
+      s.radioReady = false;
+      s.chip = { mode: "OFF", profile: "-", txDone: false };
+      say(s, "component", "startRadio(): session.init() failed; returns false, topology carries on (silent)");
+      break;
+    case "engineMidCall":
+      if (s.option === 1) alarm(s, "Race: the USP engine pass runs while the component thread is inside smtc_rac_lock_radio_access(). The fork mutex is not taken there, so the planner's task structs can tear (the RP_FAILSAFE panic of HWIL 2026-07-11).");
+      else if (s.option === 3) say(s, "USP thread", "engine blocks on rac_api_mutex until SMTC_SW_PLATFORM(lock_radio_access) returns. Serialized.");
+      else say(s, "", "No such interleaving: the engine runs only inside engineKick, on the component thread.");
+      break;
+    case "v121Rx":
+      if (s.option === 2) say(s, "", "usp v1.2.1 reports IRQ pending for as long as the RX LOCK is held. The engine runs once per kick and no loop polls that flag, so nothing spins.");
+      else alarm(s, `usp v1.2.1: rp_get_irq_flag stays pending while the RX LOCK is held, so the USP thread (prio 2) never sleeps. F´ threads below prio 2 starve${s.option === 3 ? ", and the loop retakes rac_api_mutex on every pass" : ""}. (Inferred in #587, not benched.)`);
+      break;
+    case "componentStep": {
+      const m = s.queue.shift();
+      if (!m) { say(s, "component", "queue empty"); break; }
+      say(s, "component", `▶ handles ${m.type}${m.profile ? " " + m.profile : ""}${m.value ? " " + m.value : ""}`);
+      (s.option === 2 ? handle2 : handle13)(s, m);
+      break;
+    }
+  }
+  return s;
+}
+
+// ===================================================================
+// PAGE (throwaway shell)
+// ===================================================================
+const ACTIONS = [
+  ["Ground: SET_RX_PROFILE P4", { type: "groundSetRx", profile: "P4" }],
+  ["Ground: SET_RX_PROFILE P0", { type: "groundSetRx", profile: "P0" }],
+  ["Ground frame on P0 reaches the antenna", { type: "airFrame", profile: "P0" }],
+  ["Ground frame on P4 reaches the antenna", { type: "airFrame", profile: "P4" }],
+  ["ComQueue sends a downlink frame", { type: "comQueueSends" }],
+  ["Chip raises TX_DONE", { type: "txDoneIrq" }],
+  ["Ground: TRANSMIT DISABLED", { type: "groundTransmit", value: "DISABLED" }],
+  ["Ground: TRANSMIT ENABLED", { type: "groundTransmit", value: "ENABLED" }],
+  ["Revert deadline passes", { type: "revertDeadline" }],
+  ["Component thread handles its next message", { type: "componentStep" }],
+  ["Boot: radio init fails", { type: "bootInitFails" }],
+  ["USP engine wakes mid-call", { type: "engineMidCall" }],
+  ["Continuous RX on usp v1.2.1", { type: "v121Rx" }],
+];
+const A = Object.fromEntries(ACTIONS.map(([l, a]) => [l, a]));
+const STEP = "Component thread handles its next message";
+
+const SCENARIOS = [
+  { title: "A · Profile switch with a frame in the air",
+    desc: "The operator switches the uplink to P4 with a 60 s revert. A frame the ground sent on P0 arrives just after the command is queued. Watch what confirms P4, then let the revert deadline pass. Options 1 and 3 confirm P4 with the P0 frame, so the revert never fires and the board stays on a profile the ground is not using.",
+    steps: ["Ground: SET_RX_PROFILE P4", "Ground frame on P0 reaches the antenna", STEP, STEP, "Revert deadline passes", STEP, "Ground frame on P0 reaches the antenna"] },
+  { title: "B · Radio init fails at boot",
+    desc: "session.init() fails, startRadio() returns false, and nothing stops the boot. An operator then commands a profile change. Options 1 and 3 index the planner's task array with the invalid radio id 0xFF.",
+    steps: ["Boot: radio init fails", "Ground: SET_RX_PROFILE P4", STEP] },
+  { title: "C · Deaf-recovery lever: DISABLED twice, then ENABLED",
+    desc: "The documented recover-RX lever is a repeated TRANSMIT DISABLED. #14 alone then primed a second SUCCESS into a READY ComQueue and hit FW_ASSERT. Both options here stay correct; compare how. Option 1 relies on an atomic flag written from two threads, and option 2 relies on a 3-state field that only one thread touches.",
+    steps: ["Ground: TRANSMIT DISABLED", STEP, "Ground: TRANSMIT DISABLED", STEP, "Ground: TRANSMIT ENABLED", STEP, "ComQueue sends a downlink frame", STEP, "Chip raises TX_DONE", STEP] },
+  { title: "D · Revert deadline during a downlink frame",
+    desc: "A frame is on the air when the revert tick arrives. In options 1 and 3, the component thread was blocked inside the TX, so the tick simply waits behind it. In option 2 the thread is free during TX, so the revert sees the TX in flight and defers its re-arm to TX done instead of aborting the frame.",
+    steps: ["Ground: SET_RX_PROFILE P4", STEP, "ComQueue sends a downlink frame", STEP, "Revert deadline passes", STEP, "Chip raises TX_DONE", STEP] },
+  { title: "E · Engine pass races a lock call",
+    desc: "Found in #585: the fork mutex is not taken in smtc_rac_lock_radio_access(), and quiesceRadio() calls ral_* with no lock at all. This is one click per option.",
+    steps: ["USP engine wakes mid-call"] },
+  { title: "F · usp v1.2.1 continuous RX",
+    desc: "Found in #587: on v1.2.1 a held LOCK counts as a pending IRQ. That matters only if something loops on the flag at high priority.",
+    steps: ["Continuous RX on usp v1.2.1"] },
+  { title: "G · Two frames back to back (option 2's cost)",
+    desc: "Two uplink frames arrive before the component thread reaches the kick. Options 1 and 3 have the USP thread at prio 2 harvesting each frame into a 4-slot ring. In option 2 the engine runs only when the queue reaches the kick, so a second frame overwrites the first in the chip FIFO. The bound is that the component must service a kick within one frame airtime (about 25 ms for 252 B at P5's 83 kbps). That is a bench question for P3 saturation.",
+    steps: ["Ground frame on P0 reaches the antenna", "Ground frame on P0 reaches the antenna", STEP, STEP] },
+];
+
+let curOpt = 1, curScen = 0, state, logAll = [], stepIdx = 0, prevState;
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  Object.entries(attrs).forEach(([k, v]) => (k === "class" ? (e.className = v) : k.startsWith("on") ? (e[k] = v) : e.setAttribute(k, v)));
+  kids.flat().forEach((k) => e.append(k));
+  return e;
+}
+
+function dispatch(action) {
+  prevState = state;
+  state = step(state, action);
+  logAll = logAll.concat(state.log);
+  render();
+}
+
+function startScenario(i) {
+  curScen = i; stepIdx = 0;
+  state = createState(curOpt); prevState = state; logAll = [];
+  render();
+}
+
+function row(label, now, before) {
+  return [el("dt", {}, label), el("dd", { class: before !== undefined && before !== now ? "changed" : "" }, String(now))];
+}
+
+function render() {
+  const o = document.getElementById("opttabs"); o.innerHTML = "";
+  Object.entries(OPTIONS).forEach(([k, v]) => o.append(el("button", { class: +k === curOpt ? "on" : "", onclick: () => { curOpt = +k; startScenario(curScen); } }, v.name)));
+  document.getElementById("optdesc").textContent = OPTIONS[curOpt].desc;
+
+  const s = state, p = prevState || s;
+  const st = document.getElementById("state"); st.innerHTML = "";
+  st.append(
+    el("div", { class: "card" }, el("h3", {}, "Radio"), el("dl", {},
+      row("Chip", s.chip.mode === "RX" ? `listening on ${s.chip.profile}` : s.chip.mode === "TX" ? `transmitting on ${s.chip.profile}` : s.chip.mode, p.chip.mode === "RX" ? `listening on ${p.chip.profile}` : p.chip.mode === "TX" ? `transmitting on ${p.chip.profile}` : p.chip.mode),
+      row("Init", s.radioReady ? "ok" : "FAILED", p.radioReady ? "ok" : "FAILED"),
+      row("Uplink profile in use", s.policy.committed, p.policy.committed),
+      row("Awaiting confirm", s.policy.pending || "none", p.policy.pending || "none"),
+      row("Frames delivered", s.delivered, p.delivered))),
+    el("div", { class: "card" }, el("h3", {}, "Downlink pipeline"), el("dl", {},
+      row("Transmit", s.transmit, p.transmit),
+      row("ComQueue", s.comQueue === "READY" ? "READY (holds a SUCCESS)" : "WAITING", p.comQueue === "READY" ? "READY (holds a SUCCESS)" : "WAITING"),
+      ...(s.option === 2 ? row("Link (one field)", s.link, p.link) : row("m_comStatusOwed (atomic)", s.owed, p.owed)))),
+    el("div", { class: "card" }, el("h3", {}, "Threads"),
+      el("div", {}, el("b", {}, "Component queue: "), s.queue.length ? el("span", { class: "chips" }, s.queue.map((m) => el("span", {}, m.type.replace("_PROFILE", "") + (m.profile ? " " + m.profile : "") + (m.value ? " " + m.value : "")))) : el("span", { class: "empty" }, "empty")),
+      s.option === 2
+        ? el("div", {}, el("b", {}, "Chip FIFO: "), s.fifo ? `frame on ${s.fifo.profile}` : el("span", { class: "empty" }, "empty"))
+        : el("div", {}, el("b", {}, "RX ring (USP → component): "), s.ring.length ? el("span", { class: "chips" }, s.ring.map((f) => el("span", {}, "frame on " + f.profile))) : el("span", { class: "empty" }, "empty")),
+      s.alarms.length ? s.alarms.map((a) => el("div", { class: "alarm" }, "✕ " + a)) : el("div", { class: "okline" }, "No defects hit so far"))
+  );
+
+  const t = document.getElementById("scentabs"); t.innerHTML = "";
+  SCENARIOS.forEach((sc, i) => t.append(el("button", { class: i === curScen ? "on" : "", onclick: () => startScenario(i) }, sc.title)));
+  const sc = SCENARIOS[curScen];
+  document.getElementById("scentitle").textContent = sc.title;
+  document.getElementById("scendesc").textContent = sc.desc;
+  const stepsEl = document.getElementById("steps"); stepsEl.innerHTML = "";
+  sc.steps.forEach((label, i) => stepsEl.append(el("button", {
+    class: i === stepIdx ? "next" : "", disabled: i !== stepIdx ? "" : null,
+    onclick: () => { stepIdx++; dispatch(A[label]); } }, `${i + 1}. ${label}`)));
+  [...stepsEl.querySelectorAll("button")].forEach((b, i) => { b.disabled = i !== stepIdx; });
+
+  const lg = document.getElementById("log"); lg.innerHTML = "";
+  if (!logAll.length) lg.append(el("div", { class: "empty" }, "Press the highlighted step."));
+  logAll.forEach((l) => {
+    const cls = { "USP thread": "usp", component: "comp", "caller thread": "caller", chip: "chip", "kick pump": "usp" }[l.who] || "";
+    lg.append(el("div", {}, el("span", { class: "who " + cls }, l.who), el("span", { class: l.bad ? "bad" : "" }, l.text)));
+  });
+  lg.scrollTop = lg.scrollHeight;
+
+  const ac = document.getElementById("actions");
+  if (!ac.childElementCount) ACTIONS.forEach(([label, a]) => ac.append(el("button", { onclick: () => dispatch(a) }, label)));
+}
+
+startScenario(0);
+</script>
+</body>
+</html>
