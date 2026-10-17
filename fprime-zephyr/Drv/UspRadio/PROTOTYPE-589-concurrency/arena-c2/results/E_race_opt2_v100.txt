@@ -1,0 +1,12 @@
+option=opt2 usp=v1.0.0 scenario=race spi_hz=0 protect_mode=0
+race_rounds=959
+rx_delivered=29 rx_confirms=7 rx_false_confirms=0 rx_dropped_ring=0
+tx_done_ok=138 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+handlers=1868 handler_us_max=52 handler_us_avg=1 queue_wait_us_max=76 queue_overflow=0
+rx_service_n=29 rx_service_us_max=161 rx_service_us_avg=110
+fifo_read_n=29 fifo_read_us_max=161 fifo_read_us_avg=110 rx_overwritten=4
+tx_episode_n=138 tx_episode_us_max=35138 tx_episode_us_avg=28667
+rearm_n=148 rearm_us_max=23 rearm_us_avg=1
+spi_transactions=7573 spi_bytes=38008 spi_busy_ms=0 set_rx=177 set_tx=139 set_standby=287 set_sleep=287 set_mod_params=287 read_buffer=29 write_buffer=139
+engine_calls=1014 enqueue_calls=287 engine_enqueue_overlaps=0 nested_same_thread=138 stop_errors=0
+air_delivered=34 air_lost_not_in_rx=3779 dio1=167 hal_wakeups=453 usp_passes=1014 usp_no_sleep=0 chip_mode=3

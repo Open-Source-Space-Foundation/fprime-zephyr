@@ -1,0 +1,12 @@
+option=opt2 usp=v1.0.0 scenario=busyloop spi_hz=0 protect_mode=0
+busyloop_trigger=1 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+rx_delivered=1 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+handlers=1 handler_us_max=2 handler_us_avg=2 queue_wait_us_max=6 queue_overflow=0
+rx_service_n=1 rx_service_us_max=17216961135462251309 rx_service_us_avg=17216961135462251309
+fifo_read_n=1 fifo_read_us_max=111 fifo_read_us_avg=111 rx_overwritten=0
+tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+rearm_n=1 rearm_us_max=5 rearm_us_avg=5
+spi_transactions=47 spi_bytes=249 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=1 set_sleep=1 set_mod_params=1 read_buffer=1 write_buffer=0
+engine_calls=2 enqueue_calls=1 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+air_delivered=1 air_lost_not_in_rx=0 dio1=1 hal_wakeups=1 usp_passes=2 usp_no_sleep=0 chip_mode=4

@@ -1,0 +1,13 @@
+# Rationale: approaches considered and rejected
+
+**Chosen: host simulation that compiles the real usp stack and the real RalSessionImpl, faking only the SX126x SPI HAL and smtc_modem_hal.**
+Reason: the claims are about interleavings inside the radio planner, smtc_rac and RalSessionImpl. A re-modelled planner would reproduce the author's beliefs, not the code. The sx126x driver's 4-function HAL (`sx126x_hal_write/read/reset/wakeup`) is a small, opcode-level edge; faking there keeps the RAL, RALF and driver real and gives SPI byte counts for free.
+
+Rejected or deferred:
+
+1. **Dev-board measurement of claim G (kick latency with the real thread mix).** Would need an instrumented v5e deployment built from a PCR worktree, flashed through the Pi, with a serial channel for the numbers (the deployment ships with `CONFIG_CONSOLE=n`). Hours of build/flash work shared with three other candidates for one number. The host sim plus the SPI arithmetic from the real driver answers G to first order (RX service is dominated by a 17.9 ms SPI read at 125 kHz, identical in every option); the board drill is listed in RECOMMENDATION.md. The board was not touched; no image to report.
+2. **ThreadSanitizer for claim E.** Built (`*_tsan`), but under TSan on this Mac the shim's semaphore wake-ups stall (the USP thread never returns from `k_sem_take` after a `k_sem_give`; the plain build and a minimal condvar test are fine). Replaced by a cross-thread overlap counter around the real `rp_callback` / `rp_task_enqueue` (`-D` renames in `smtc_rac.c` only), which measures the race the claim names rather than inferring it.
+3. **Compiling the real `UspRadio.cpp`.** Needs the F´ autocoder output (`UspRadioComponentBase`); not worth an F´ build for a prototype. The handlers were lifted line-by-line instead, with the queue, ComQueue credit protocol and the internal-port priorities kept.
+4. **Faking at the RAL driver table (`ral_drv_t`) instead of the SPI HAL.** Fewer functions to model, but it would drop the real sx126x driver and the byte counts that the re-arm and RX-latency numbers rest on.
+5. **Virtual (discrete-event) clock.** Would make timings deterministic, but every `k_sleep`/`k_sem_take` in RalSessionImpl and the planner's `k_timer` would have to be re-pointed at it; the real-clock pthread shim ran the whole stack on the first try. Cost: host timings are host timings (noted as such in RESULTS.md).
+6. **Testing the prototype's option-2 sketch as shipped.** It does not compile (missing bodies, wrong `rp_disable_failsafe` arity, `m_state` set after a lock whose pre-callback can already fail). Completed into `sim/opt2/`; the deviations are marked `SKETCH:` in the source.

@@ -1,0 +1,27 @@
+[UspRadio] RAL session initialized (freq=437000000 Hz, pwr=22 dBm)
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P0 confirmed P1
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P0 confirmed P1
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+[opt3] FALSE CONFIRM: frame on P0 confirmed P1
+[opt3] FALSE CONFIRM: frame on P0 confirmed P1
+[opt3] FALSE CONFIRM: frame on P1 confirmed P0
+option=opt3 usp=v1.0.0 scenario=stale spi_hz=0 protect_mode=0
+stale_iters=200
+rx_delivered=358 rx_confirms=195 rx_false_confirms=14 rx_dropped_ring=0
+tx_done_ok=0 tx_failed=0 cfg_failed=7 change_deferred=0 reverts=0
+handlers=558 handler_us_max=5203 handler_us_avg=70 queue_wait_us_max=5246 queue_overflow=0
+rx_service_n=358 rx_service_us_max=13731 rx_service_us_avg=349
+fifo_read_n=358 fifo_read_us_max=10380 fifo_read_us_avg=265 rx_overwritten=68
+tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+rearm_n=193 rearm_us_max=2580 rearm_us_avg=76
+spi_transactions=8456 spi_bytes=47347 spi_busy_ms=0 set_rx=586 set_tx=0 set_standby=200 set_sleep=429 set_mod_params=195 read_buffer=358 write_buffer=0
+engine_calls=799 enqueue_calls=396 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+air_delivered=426 air_lost_not_in_rx=26 dio1=426 hal_wakeups=814 usp_passes=799 usp_no_sleep=1 chip_mode=4

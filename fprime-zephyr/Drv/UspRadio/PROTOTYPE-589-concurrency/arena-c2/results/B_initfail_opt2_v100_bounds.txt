@@ -1,0 +1,12 @@
+option=opt2 usp=v1.0.0 scenario=initfail spi_hz=0 protect_mode=0
+startRadio_ok=0
+rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+tx_done_ok=0 tx_failed=1 cfg_failed=8 change_deferred=0 reverts=0
+handlers=9 handler_us_max=9 handler_us_avg=1 queue_wait_us_max=736 queue_overflow=0
+rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+tx_episode_n=1 tx_episode_us_max=268 tx_episode_us_avg=268
+rearm_n=0 rearm_us_max=0 rearm_us_avg=0
+spi_transactions=9 spi_bytes=46 spi_busy_ms=0 set_rx=0 set_tx=0 set_standby=0 set_sleep=1 set_mod_params=0 read_buffer=0 write_buffer=0
+engine_calls=0 enqueue_calls=0 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=0 usp_passes=0 usp_no_sleep=0 chip_mode=0

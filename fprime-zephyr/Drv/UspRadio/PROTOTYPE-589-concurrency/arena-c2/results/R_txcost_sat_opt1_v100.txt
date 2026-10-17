@@ -1,0 +1,13 @@
+[UspRadio] RAL session initialized (freq=437000000 Hz, pwr=22 dBm)
+option=opt1 usp=v1.0.0 scenario=txcost spi_hz=125000 protect_mode=1
+txcost_n=20 saturated=1 wall_ms=1221 per_frame_ms=61.06
+rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+tx_done_ok=20 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+handlers=20 handler_us_max=74791 handler_us_avg=58140 queue_wait_us_max=1505 queue_overflow=0
+rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+tx_episode_n=20 tx_episode_us_max=61612 tx_episode_us_avg=57403
+rearm_n=1 rearm_us_max=7160 rearm_us_avg=7160
+spi_transactions=604 spi_bytes=7610 spi_busy_ms=487 set_rx=1 set_tx=20 set_standby=20 set_sleep=42 set_mod_params=21 read_buffer=0 write_buffer=20
+engine_calls=85 enqueue_calls=45 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+air_delivered=0 air_lost_not_in_rx=0 dio1=20 hal_wakeups=64 usp_passes=85 usp_no_sleep=20 chip_mode=4

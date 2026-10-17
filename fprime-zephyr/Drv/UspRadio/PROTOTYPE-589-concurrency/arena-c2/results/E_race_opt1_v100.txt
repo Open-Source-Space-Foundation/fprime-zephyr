@@ -1,0 +1,15 @@
+[UspRadio] RAL session initialized (freq=437000000 Hz, pwr=22 dBm)
+[UspRadio] stopRadio: hook not FINISHED 1000 ms after abort on radio_id=2 (state=3) - RAC hook likely wedged RUNNING
+[UspRadio] stopRadio: hook not FINISHED 1000 ms after abort on radio_id=2 (state=3) - RAC hook likely wedged RUNNING
+option=opt1 usp=v1.0.0 scenario=race spi_hz=0 protect_mode=1
+race_rounds=139
+rx_delivered=496 rx_confirms=138 rx_false_confirms=9 rx_dropped_ring=0
+tx_done_ok=69 tx_failed=1 cfg_failed=1 change_deferred=0 reverts=0
+handlers=753 handler_us_max=1043346 handler_us_avg=5723 queue_wait_us_max=42669 queue_overflow=0
+rx_service_n=496 rx_service_us_max=246 rx_service_us_avg=91
+fifo_read_n=496 fifo_read_us_max=157 fifo_read_us_avg=85 rx_overwritten=28
+tx_episode_n=70 tx_episode_us_max=1035876 tx_episode_us_avg=54318
+rearm_n=229 rearm_us_max=204 rearm_us_avg=18
+spi_transactions=12392 spi_bytes=66453 spi_busy_ms=0 set_rx=729 set_tx=69 set_standby=227 set_sleep=636 set_mod_params=300 read_buffer=496 write_buffer=69
+engine_calls=1248 enqueue_calls=600 engine_enqueue_overlaps=1 nested_same_thread=0 stop_errors=2
+air_delivered=524 air_lost_not_in_rx=4107 dio1=586 hal_wakeups=1181 usp_passes=1248 usp_no_sleep=71 chip_mode=4

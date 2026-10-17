@@ -1,0 +1,133 @@
+diff --git a/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp b/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp
+index 6931b9c..0487cd2 100644
+--- a/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp
++++ b/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp
+@@ -38,4 +38,5 @@
+ #include <Fw/Logger/Logger.hpp>
+ #include <zephyr/kernel.h>
++#include <zephyr/usp/smtc_sw_platform_helper.h>  // SMTC_SW_PLATFORM, rac_api_mutex (CONFIG_USP_THREADS_MUTEXES=y)
+ 
+ // Pull in USP RAL pulse-shape / CRC enums
+@@ -103,8 +104,8 @@ int RalSessionImpl::init() {
+     // from the RAC public API.  Note: zephyr_smtc_rac_init() is declared in the
+     // USP Zephyr header but has no implementation — call smtc_rac_init() directly.
+-    smtc_rac_init();
++    SMTC_SW_PLATFORM_VOID(smtc_rac_init());
+ 
+     // Open a persistent radio access session at high priority.
+-    m_radio_id = smtc_rac_open_radio(RAC_HIGH_PRIORITY);
++    m_radio_id = SMTC_SW_PLATFORM(smtc_rac_open_radio(RAC_HIGH_PRIORITY));
+     if (m_radio_id == RAC_INVALID_RADIO_ID) {
+         Fw::Logger::log("[UspRadio] smtc_rac_open_radio() returned INVALID_ID\n");
+@@ -184,5 +185,5 @@ int RalSessionImpl::applyProfile(const LinkProfile& profile) {
+     cfg.callback_post_radio_transaction = onPostApply;
+ 
+-    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
++    smtc_rac_return_code_t rc = SMTC_SW_PLATFORM(smtc_rac_lock_radio_access(m_radio_id, cfg));
+     if (rc != SMTC_RAC_SUCCESS) {
+         return -EIO;
+@@ -394,16 +395,15 @@ int RalSessionImpl::startReceive() {
+     // (bounded) for FINISHED — the same completion criterion stopRadio() uses —
+     // instead of failing the enqueue and leaving the radio deaf.
+-    radio_planner_t* rp = smtc_rac_get_rp();
+     int32_t waited_ms = 0;
+-    while ((rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) &&
++    while ((hookState() != RP_TASK_STATE_FINISHED) &&
+            (waited_ms < ENQUEUE_READY_DEADLINE_MS)) {
+         k_sleep(K_MSEC(1));
+         ++waited_ms;
+     }
+-    if (rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) {
++    if (hookState() != RP_TASK_STATE_FINISHED) {
+         Fw::Logger::log(
+             "[UspRadio] startReceive: RAC hook not FINISHED after %" PRId32
+             " ms (state=%d) - radio busy\n",
+-            ENQUEUE_READY_DEADLINE_MS, static_cast<int>(rp->tasks[m_radio_id].state));
++            ENQUEUE_READY_DEADLINE_MS, static_cast<int>(hookState()));
+         return -EBUSY;
+     }
+@@ -415,5 +415,5 @@ int RalSessionImpl::startReceive() {
+     cfg.callback_post_radio_transaction = onPostRx;
+ 
+-    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
++    smtc_rac_return_code_t rc = SMTC_SW_PLATFORM(smtc_rac_lock_radio_access(m_radio_id, cfg));
+     if (rc != SMTC_RAC_SUCCESS) {
+         Fw::Logger::log("[UspRadio] startReceive: smtc_rac_lock_radio_access failed rc=%d\n",
+@@ -538,5 +538,5 @@ int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
+     cfg.callback_post_radio_transaction = onPostTx;
+ 
+-    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
++    smtc_rac_return_code_t rc = SMTC_SW_PLATFORM(smtc_rac_lock_radio_access(m_radio_id, cfg));
+     if (rc != SMTC_RAC_SUCCESS) return -EIO;
+ 
+@@ -551,8 +551,7 @@ int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
+         // HWIL anomaly B.  Abort the stuck task, wait for the engine to
+         // free it, then force the chip back to standby.
+-        (void)smtc_rac_unlock_radio_access(m_radio_id);
+-        radio_planner_t* rp = smtc_rac_get_rp();
+-        int32_t waited_ms = 0;
+-        while ((rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) &&
++        (void)SMTC_SW_PLATFORM(smtc_rac_unlock_radio_access(m_radio_id));
++            int32_t waited_ms = 0;
++        while ((hookState() != RP_TASK_STATE_FINISHED) &&
+                (waited_ms < ENQUEUE_READY_DEADLINE_MS)) {
+             k_sleep(K_MSEC(1));
+@@ -561,5 +560,5 @@ int RalSessionImpl::transmitPacket(const uint8_t* data, std::size_t size) {
+         this->quiesceRadio();
+         Fw::Logger::log("[UspRadio] transmitPacket: TX_DONE timeout - task aborted, radio quiesced (hook state=%d)\n",
+-                        static_cast<int>(rp->tasks[m_radio_id].state));
++                        static_cast<int>(hookState()));
+         return -ETIMEDOUT;
+     }
+@@ -609,5 +608,5 @@ int RalSessionImpl::startCw() {
+     cfg.callback_post_radio_transaction = onPostCw;
+ 
+-    smtc_rac_return_code_t rc = smtc_rac_lock_radio_access(m_radio_id, cfg);
++    smtc_rac_return_code_t rc = SMTC_SW_PLATFORM(smtc_rac_lock_radio_access(m_radio_id, cfg));
+     if (rc != SMTC_RAC_SUCCESS) return -EIO;
+     // Wait until the CW pre-callback has run (and CW is actually transmitting)
+@@ -669,6 +668,15 @@ constexpr int32_t STOP_DEADLINE_MS = 1000;  //!< generous bound on USP-thread ab
+ // ---------------------------------------------------------------------------
+ void RalSessionImpl::quiesceRadio() {
++    // Under the engine's mutex: without it these SPI commands interleave with
++    // an engine pass on the USP thread (#585).
++    k_mutex_lock(&rac_api_mutex, K_FOREVER);
+     (void)ral_set_standby(m_ral, RAL_STANDBY_CFG_XOSC);
+     (void)ral_clear_irq_status(m_ral, RAL_IRQ_ALL);
++    k_mutex_unlock(&rac_api_mutex);
++}
++
++//! Read the hook's task state under the engine's mutex.
++rp_task_states_t RalSessionImpl::hookState() const {
++    return SMTC_SW_PLATFORM(smtc_rac_get_rp()->tasks[m_radio_id].state);
+ }
+ 
+@@ -682,5 +690,5 @@ int RalSessionImpl::stopRadio() {
+     // smtc_rac_lock_radio_access() on it would return SMTC_RAC_ERROR.
+     // Surface it distinctly rather than swallowing it.
+-    smtc_rac_return_code_t unlock_rc = smtc_rac_unlock_radio_access(m_radio_id);
++    smtc_rac_return_code_t unlock_rc = SMTC_SW_PLATFORM(smtc_rac_unlock_radio_access(m_radio_id));
+     if (unlock_rc != SMTC_RAC_SUCCESS) {
+         Fw::Logger::log(
+@@ -695,6 +703,5 @@ int RalSessionImpl::stopRadio() {
+     // taken after the abort call: the abort itself never moves a hook TO
+     // FINISHED synchronously, so FINISHED here still means "was idle".)
+-    radio_planner_t* rp = smtc_rac_get_rp();
+-    if (rp->tasks[m_radio_id].state == RP_TASK_STATE_FINISHED) {
++    if (hookState() == RP_TASK_STATE_FINISHED) {
+         this->quiesceRadio();
+         return 0;
+@@ -714,5 +721,5 @@ int RalSessionImpl::stopRadio() {
+         return 0;
+     }
+-    if (rp->tasks[m_radio_id].state == RP_TASK_STATE_FINISHED) {
++    if (hookState() == RP_TASK_STATE_FINISHED) {
+         this->quiesceRadio();
+         return 0;
+@@ -722,5 +729,5 @@ int RalSessionImpl::stopRadio() {
+         "[UspRadio] stopRadio: hook not FINISHED %" PRId32 " ms after abort on radio_id=%" PRIu8
+         " (state=%d) - RAC hook likely wedged RUNNING\n",
+-        STOP_DEADLINE_MS, m_radio_id, static_cast<int>(rp->tasks[m_radio_id].state));
++        STOP_DEADLINE_MS, m_radio_id, static_cast<int>(hookState()));
+     return -ETIMEDOUT;
+ }

@@ -1,0 +1,40 @@
+[UspRadio] RAL session initialized (freq=437000000 Hz, pwr=22 dBm)
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[UspRadio] stopRadio: hook not FINISHED 1000 ms after abort on radio_id=2 (state=3) - RAC hook likely wedged RUNNING
+[opt1] handler ? waited 0 ms ran 1003 ms queue=0
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+option=opt1 usp=v1.0.0 scenario=stale spi_hz=0 protect_mode=1
+stale_iters=200
+rx_delivered=361 rx_confirms=195 rx_false_confirms=25 rx_dropped_ring=0
+tx_done_ok=0 tx_failed=0 cfg_failed=3 change_deferred=1 reverts=0
+handlers=561 handler_us_max=1003233 handler_us_avg=1888 queue_wait_us_max=6231 queue_overflow=0
+rx_service_n=361 rx_service_us_max=6363 rx_service_us_avg=391
+fifo_read_n=361 fifo_read_us_max=3254 fifo_read_us_avg=277 rx_overwritten=60
+tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+rearm_n=196 rearm_us_max=3907 rearm_us_avg=113
+spi_transactions=8539 spi_bytes=47793 spi_busy_ms=0 set_rx=578 set_tx=0 set_standby=199 set_sleep=444 set_mod_params=198 read_buffer=361 write_buffer=0
+engine_calls=794 enqueue_calls=398 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+air_delivered=421 air_lost_not_in_rx=451 dio1=421 hal_wakeups=814 usp_passes=794 usp_no_sleep=6 chip_mode=4

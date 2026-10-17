@@ -1,0 +1,12 @@
+option=opt2 usp=v1.0.0 scenario=rxlat spi_hz=125000 protect_mode=0
+rxlat_period_ms=30 secs=6 tx_load=0
+rx_delivered=163 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+handlers=168 handler_us_max=18447 handler_us_avg=17884 queue_wait_us_max=16744 queue_overflow=0
+rx_service_n=163 rx_service_us_max=18292 rx_service_us_avg=18261
+fifo_read_n=163 fifo_read_us_max=17972 fifo_read_us_avg=17941 rx_overwritten=0
+tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+rearm_n=1 rearm_us_max=6592 rearm_us_avg=6592
+spi_transactions=1467 spi_bytes=46944 spi_busy_ms=3004 set_rx=163 set_tx=0 set_standby=0 set_sleep=0 set_mod_params=0 read_buffer=163 write_buffer=0
+engine_calls=164 enqueue_calls=1 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+air_delivered=163 air_lost_not_in_rx=0 dio1=163 hal_wakeups=163 usp_passes=164 usp_no_sleep=0 chip_mode=4

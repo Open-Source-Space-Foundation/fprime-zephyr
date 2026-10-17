@@ -1,0 +1,12 @@
+option=opt2 usp=v1.0.0 scenario=txcost spi_hz=125000 protect_mode=0
+txcost_n=20 saturated=0 wall_ms=1274 per_frame_ms=63.74
+rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+tx_done_ok=20 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+handlers=80 handler_us_max=23685 handler_us_avg=7900 queue_wait_us_max=23681 queue_overflow=0
+rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+tx_episode_n=20 tx_episode_us_max=66692 tx_episode_us_avg=62259
+rearm_n=21 rearm_us_max=6593 rearm_us_avg=6591
+spi_transactions=1020 spi_bytes=9560 spi_busy_ms=611 set_rx=20 set_tx=20 set_standby=40 set_sleep=40 set_mod_params=40 read_buffer=0 write_buffer=20
+engine_calls=141 enqueue_calls=41 engine_enqueue_overlaps=0 nested_same_thread=20 stop_errors=0
+air_delivered=0 air_lost_not_in_rx=0 dio1=20 hal_wakeups=60 usp_passes=141 usp_no_sleep=0 chip_mode=4

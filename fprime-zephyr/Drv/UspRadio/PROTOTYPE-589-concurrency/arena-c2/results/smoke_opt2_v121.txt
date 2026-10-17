@@ -1,0 +1,11 @@
+option=opt2 usp=v1.2.1 scenario=smoke spi_hz=0 protect_mode=0
+rx_delivered=37 rx_confirms=2 rx_false_confirms=0 rx_dropped_ring=0
+tx_done_ok=5 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+handlers=65 handler_us_max=47 handler_us_avg=8 queue_wait_us_max=471 queue_overflow=0
+rx_service_n=37 rx_service_us_max=2076 rx_service_us_avg=313
+fifo_read_n=37 fifo_read_us_max=2075 fifo_read_us_avg=312 rx_overwritten=0
+tx_episode_n=5 tx_episode_us_max=33407 tx_episode_us_avg=29490
+rearm_n=8 rearm_us_max=14 rearm_us_avg=5
+spi_transactions=684 spi_bytes=5644 spi_busy_ms=0 set_rx=50 set_tx=5 set_standby=13 set_sleep=13 set_mod_params=13 read_buffer=37 write_buffer=5
+engine_calls=109 enqueue_calls=13 engine_enqueue_overlaps=0 nested_same_thread=5 stop_errors=0
+air_delivered=37 air_lost_not_in_rx=6 dio1=42 hal_wakeups=54 usp_passes=109 usp_no_sleep=10 chip_mode=4

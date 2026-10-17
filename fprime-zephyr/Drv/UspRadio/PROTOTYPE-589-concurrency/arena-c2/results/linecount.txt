@@ -1,0 +1,16 @@
+set                                            code    raw
+opt1 UspRadio.{cpp,hpp}+RalSessionImpl.{cpp,hpp}    920   1825
+opt1 UspRadio.cpp+RalSessionImpl.cpp            775   1420
+opt3 (opt1 + upstream-mutex diff applied)       924   1833
+opt3 .cpp only                                  778   1427
+opt2 sketch as shipped (incomplete)             364    539
+opt2 RalSessionSt completed (this sim)          360    425
+opt2 component model (this sim, incl. F' stand-ins)    247    277
+opt1 component model (this sim, incl. F' stand-ins)    338    418
+
+primitive counts (grep -c over opt1 UspRadio.cpp+RalSessionImpl.cpp / opt2 RalSessionSt.cpp+UspRadioSim2.cpp):
+  k_sem                        opt1=20   opt3=20   opt2=3
+  std::atomic\|atomic<         opt1=0    opt3=0    opt2=3
+  k_sleep                      opt1=4    opt3=4    opt2=3
+  tasks\[                      opt1=8    opt3=1    opt2=0
+  k_mutex\|SMTC_SW_PLATFORM    opt1=0    opt3=12   opt2=0

@@ -1,0 +1,17 @@
+[UspRadio] RAL session initialized (freq=437000000 Hz, pwr=22 dBm)
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P0 confirmed P1
+[opt1] FALSE CONFIRM: frame on P1 confirmed P0
+option=opt1 usp=v1.0.0 scenario=stale spi_hz=125000 protect_mode=1
+stale_iters=60
+rx_delivered=34 rx_confirms=31 rx_false_confirms=4 rx_dropped_ring=0
+tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+handlers=94 handler_us_max=19500 handler_us_avg=6305 queue_wait_us_max=12921 queue_overflow=0
+rx_service_n=34 rx_service_us_max=24797 rx_service_us_avg=6203
+fifo_read_n=34 fifo_read_us_max=11508 fifo_read_us_avg=4266 rx_overwritten=3
+tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+rearm_n=60 rearm_us_max=15323 rearm_us_avg=7941
+spi_transactions=1960 spi_bytes=9593 spi_busy_ms=613 set_rx=95 set_tx=0 set_standby=60 set_sleep=143 set_mod_params=62 read_buffer=34 write_buffer=0
+engine_calls=161 enqueue_calls=123 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+air_delivered=37 air_lost_not_in_rx=23 dio1=37 hal_wakeups=159 usp_passes=161 usp_no_sleep=2 chip_mode=4

@@ -1,0 +1,6 @@
+[UspRadio] smtc_rac_open_radio() returned INVALID_ID
+[opt1] session.init() failed
+[hal] PANIC smtc_rac_abort_radio_submit:475 radio_access_id is out of range
+option=opt1 usp=v1.0.0 scenario=initfail spi_hz=0 protect_mode=1
+startRadio_ok=0
+/Users/ossf-1/GitHut/arena-589/c2/fprime-zephyr/Drv/UspRadio/PROTOTYPE-589-concurrency/arena-c2/tools/run_all.sh: line 11: 83301 Abort trap: 6           env $envs "./$bin" "$@"

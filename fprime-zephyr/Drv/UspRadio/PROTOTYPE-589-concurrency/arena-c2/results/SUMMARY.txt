@@ -1,0 +1,471 @@
+== smoke_opt1_v100: env[] opt1_v100 smoke
+   rx_delivered=37 rx_confirms=2 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=5 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=48 handler_us_max=42866 handler_us_avg=3791 queue_wait_us_max=1509 queue_overflow=0
+   rx_service_n=37 rx_service_us_max=129 rx_service_us_avg=104
+   fifo_read_n=37 fifo_read_us_max=111 fifo_read_us_avg=92 rx_overwritten=0
+   tx_episode_n=5 tx_episode_us_max=36774 tx_episode_us_avg=34829
+   rearm_n=4 rearm_us_max=50 rearm_us_avg=31
+   spi_transactions=634 spi_bytes=5398 spi_busy_ms=0 set_rx=42 set_tx=5 set_standby=8 set_sleep=21 set_mod_params=11 read_buffer=37 write_buffer=5
+   engine_calls=68 enqueue_calls=21 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=37 air_lost_not_in_rx=7 dio1=42 hal_wakeups=62 usp_passes=68 usp_no_sleep=5 chip_mode=4
+== smoke_opt3_v100: env[] opt3_v100 smoke
+   rx_delivered=37 rx_confirms=2 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=5 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=48 handler_us_max=36754 handler_us_avg=3400 queue_wait_us_max=1511 queue_overflow=0
+   rx_service_n=37 rx_service_us_max=188 rx_service_us_avg=117
+   fifo_read_n=37 fifo_read_us_max=157 fifo_read_us_avg=101 rx_overwritten=0
+   tx_episode_n=5 tx_episode_us_max=36811 tx_episode_us_avg=31145
+   rearm_n=4 rearm_us_max=57 rearm_us_avg=26
+   spi_transactions=634 spi_bytes=5398 spi_busy_ms=0 set_rx=42 set_tx=5 set_standby=8 set_sleep=21 set_mod_params=11 read_buffer=37 write_buffer=5
+   engine_calls=68 enqueue_calls=21 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=37 air_lost_not_in_rx=6 dio1=42 hal_wakeups=62 usp_passes=68 usp_no_sleep=5 chip_mode=4
+== smoke_opt2_v100: env[] opt2_v100 smoke
+   rx_delivered=36 rx_confirms=2 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=5 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=64 handler_us_max=64 handler_us_avg=12 queue_wait_us_max=47 queue_overflow=0
+   rx_service_n=36 rx_service_us_max=147 rx_service_us_avg=116
+   fifo_read_n=36 fifo_read_us_max=144 fifo_read_us_avg=113 rx_overwritten=0
+   tx_episode_n=5 tx_episode_us_max=35073 tx_episode_us_avg=31537
+   rearm_n=8 rearm_us_max=26 rearm_us_avg=11
+   spi_transactions=665 spi_bytes=5508 spi_busy_ms=0 set_rx=44 set_tx=5 set_standby=13 set_sleep=13 set_mod_params=13 read_buffer=36 write_buffer=5
+   engine_calls=78 enqueue_calls=13 engine_enqueue_overlaps=0 nested_same_thread=5 stop_errors=0
+   air_delivered=36 air_lost_not_in_rx=6 dio1=41 hal_wakeups=53 usp_passes=78 usp_no_sleep=0 chip_mode=4
+== smoke_opt1_v121: env[] opt1_v121 smoke
+   rx_delivered=39 rx_confirms=2 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=5 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=50 handler_us_max=36674 handler_us_avg=3091 queue_wait_us_max=1506 queue_overflow=0
+   rx_service_n=39 rx_service_us_max=121 rx_service_us_avg=82
+   fifo_read_n=39 fifo_read_us_max=99 fifo_read_us_avg=77 rx_overwritten=0
+   tx_episode_n=5 tx_episode_us_max=36688 tx_episode_us_avg=29482
+   rearm_n=4 rearm_us_max=13 rearm_us_avg=9
+   spi_transactions=652 spi_bytes=5590 spi_busy_ms=0 set_rx=44 set_tx=5 set_standby=8 set_sleep=21 set_mod_params=11 read_buffer=39 write_buffer=5
+   engine_calls=8067586 enqueue_calls=21 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=39 air_lost_not_in_rx=6 dio1=44 hal_wakeups=64 usp_passes=8067590 usp_no_sleep=8067560 chip_mode=4
+== smoke_opt2_v121: env[] opt2_v121 smoke
+   rx_delivered=37 rx_confirms=2 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=5 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=65 handler_us_max=47 handler_us_avg=8 queue_wait_us_max=471 queue_overflow=0
+   rx_service_n=37 rx_service_us_max=2076 rx_service_us_avg=313
+   fifo_read_n=37 fifo_read_us_max=2075 fifo_read_us_avg=312 rx_overwritten=0
+   tx_episode_n=5 tx_episode_us_max=33407 tx_episode_us_avg=29490
+   rearm_n=8 rearm_us_max=14 rearm_us_avg=5
+   spi_transactions=684 spi_bytes=5644 spi_busy_ms=0 set_rx=50 set_tx=5 set_standby=13 set_sleep=13 set_mod_params=13 read_buffer=37 write_buffer=5
+   engine_calls=109 enqueue_calls=13 engine_enqueue_overlaps=0 nested_same_thread=5 stop_errors=0
+   air_delivered=37 air_lost_not_in_rx=6 dio1=42 hal_wakeups=54 usp_passes=109 usp_no_sleep=10 chip_mode=4
+== A_stale_opt1_v100: env[SIM_VERBOSE=1] opt1_v100 stale 200 1500
+   stale_iters=200
+   rx_delivered=361 rx_confirms=195 rx_false_confirms=25 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=3 change_deferred=1 reverts=0
+   handlers=561 handler_us_max=1003233 handler_us_avg=1888 queue_wait_us_max=6231 queue_overflow=0
+   rx_service_n=361 rx_service_us_max=6363 rx_service_us_avg=391
+   fifo_read_n=361 fifo_read_us_max=3254 fifo_read_us_avg=277 rx_overwritten=60
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=196 rearm_us_max=3907 rearm_us_avg=113
+   spi_transactions=8539 spi_bytes=47793 spi_busy_ms=0 set_rx=578 set_tx=0 set_standby=199 set_sleep=444 set_mod_params=198 read_buffer=361 write_buffer=0
+   engine_calls=794 enqueue_calls=398 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=421 air_lost_not_in_rx=451 dio1=421 hal_wakeups=814 usp_passes=794 usp_no_sleep=6 chip_mode=4
+   false_confirm_lines=25
+== A_stale_spi_opt1_v100: env[SIM_VERBOSE=1 SIM_SPI_HZ=125000] opt1_v100 stale 60 20000
+   stale_iters=60
+   rx_delivered=34 rx_confirms=31 rx_false_confirms=4 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=94 handler_us_max=19500 handler_us_avg=6305 queue_wait_us_max=12921 queue_overflow=0
+   rx_service_n=34 rx_service_us_max=24797 rx_service_us_avg=6203
+   fifo_read_n=34 fifo_read_us_max=11508 fifo_read_us_avg=4266 rx_overwritten=3
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=60 rearm_us_max=15323 rearm_us_avg=7941
+   spi_transactions=1960 spi_bytes=9593 spi_busy_ms=613 set_rx=95 set_tx=0 set_standby=60 set_sleep=143 set_mod_params=62 read_buffer=34 write_buffer=0
+   engine_calls=161 enqueue_calls=123 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=37 air_lost_not_in_rx=23 dio1=37 hal_wakeups=159 usp_passes=161 usp_no_sleep=2 chip_mode=4
+   false_confirm_lines=4
+== A_stale_opt3_v100: env[SIM_VERBOSE=1] opt3_v100 stale 200 1500
+   stale_iters=200
+   rx_delivered=358 rx_confirms=195 rx_false_confirms=14 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=7 change_deferred=0 reverts=0
+   handlers=558 handler_us_max=5203 handler_us_avg=70 queue_wait_us_max=5246 queue_overflow=0
+   rx_service_n=358 rx_service_us_max=13731 rx_service_us_avg=349
+   fifo_read_n=358 fifo_read_us_max=10380 fifo_read_us_avg=265 rx_overwritten=68
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=193 rearm_us_max=2580 rearm_us_avg=76
+   spi_transactions=8456 spi_bytes=47347 spi_busy_ms=0 set_rx=586 set_tx=0 set_standby=200 set_sleep=429 set_mod_params=195 read_buffer=358 write_buffer=0
+   engine_calls=799 enqueue_calls=396 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=426 air_lost_not_in_rx=26 dio1=426 hal_wakeups=814 usp_passes=799 usp_no_sleep=1 chip_mode=4
+   false_confirm_lines=14
+== A_stale_spi_opt3_v100: env[SIM_VERBOSE=1 SIM_SPI_HZ=125000] opt3_v100 stale 60 20000
+   stale_iters=60
+   rx_delivered=33 rx_confirms=30 rx_false_confirms=2 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=93 handler_us_max=17354 handler_us_avg=6187 queue_wait_us_max=8960 queue_overflow=0
+   rx_service_n=33 rx_service_us_max=13295 rx_service_us_avg=5236
+   fifo_read_n=33 fifo_read_us_max=8389 fifo_read_us_avg=4232 rx_overwritten=4
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=60 rearm_us_max=12691 rearm_us_avg=7651
+   spi_transactions=1951 spi_bytes=9525 spi_busy_ms=609 set_rx=94 set_tx=0 set_standby=60 set_sleep=143 set_mod_params=62 read_buffer=33 write_buffer=0
+   engine_calls=160 enqueue_calls=123 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=37 air_lost_not_in_rx=21 dio1=37 hal_wakeups=159 usp_passes=160 usp_no_sleep=2 chip_mode=4
+   false_confirm_lines=2
+== A_stale_opt2_v100: env[SIM_VERBOSE=1] opt2_v100 stale 200 1500
+   stale_iters=200
+   rx_delivered=342 rx_confirms=197 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=798 handler_us_max=1266 handler_us_avg=7 queue_wait_us_max=6451 queue_overflow=0
+   rx_service_n=342 rx_service_us_max=4225 rx_service_us_avg=288
+   fifo_read_n=342 fifo_read_us_max=4224 fifo_read_us_avg=287 rx_overwritten=92
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=201 rearm_us_max=145 rearm_us_avg=11
+   spi_transactions=8018 spi_bytes=45653 spi_busy_ms=0 set_rx=594 set_tx=0 set_standby=201 set_sleep=201 set_mod_params=201 read_buffer=342 write_buffer=0
+   engine_calls=999 enqueue_calls=201 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=434 air_lost_not_in_rx=1 dio1=434 hal_wakeups=634 usp_passes=999 usp_no_sleep=0 chip_mode=4
+== A_stale_spi_opt2_v100: env[SIM_VERBOSE=1 SIM_SPI_HZ=125000] opt2_v100 stale 60 20000
+   stale_iters=60
+   rx_delivered=33 rx_confirms=30 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=153 handler_us_max=35488 handler_us_avg=4181 queue_wait_us_max=34704 queue_overflow=0
+   rx_service_n=33 rx_service_us_max=6849 rx_service_us_avg=4354
+   fifo_read_n=33 fifo_read_us_max=6525 fifo_read_us_avg=4029 rx_overwritten=2
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=61 rearm_us_max=35487 rearm_us_avg=8314
+   spi_transactions=1797 spi_bytes=9041 spi_busy_ms=578 set_rx=95 set_tx=0 set_standby=61 set_sleep=71 set_mod_params=61 read_buffer=33 write_buffer=0
+   engine_calls=215 enqueue_calls=61 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=35 air_lost_not_in_rx=17 dio1=35 hal_wakeups=95 usp_passes=215 usp_no_sleep=0 chip_mode=4
+== B_initfail_opt1_v100_bounds: env[] opt1_v100_bounds initfail
+   startRadio_ok=0
+   hal_panics=1
+== B_initfail_opt2_v100_bounds: env[] opt2_v100_bounds initfail
+   startRadio_ok=0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=1 cfg_failed=8 change_deferred=0 reverts=0
+   handlers=9 handler_us_max=9 handler_us_avg=1 queue_wait_us_max=736 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=1 tx_episode_us_max=268 tx_episode_us_avg=268
+   rearm_n=0 rearm_us_max=0 rearm_us_avg=0
+   spi_transactions=9 spi_bytes=46 spi_busy_ms=0 set_rx=0 set_tx=0 set_standby=0 set_sleep=1 set_mod_params=0 read_buffer=0 write_buffer=0
+   engine_calls=0 enqueue_calls=0 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=0 usp_passes=0 usp_no_sleep=0 chip_mode=0
+== E_race_opt1_v100: env[] opt1_v100 race 4
+   race_rounds=139
+   rx_delivered=496 rx_confirms=138 rx_false_confirms=9 rx_dropped_ring=0
+   tx_done_ok=69 tx_failed=1 cfg_failed=1 change_deferred=0 reverts=0
+   handlers=753 handler_us_max=1043346 handler_us_avg=5723 queue_wait_us_max=42669 queue_overflow=0
+   rx_service_n=496 rx_service_us_max=246 rx_service_us_avg=91
+   fifo_read_n=496 fifo_read_us_max=157 fifo_read_us_avg=85 rx_overwritten=28
+   tx_episode_n=70 tx_episode_us_max=1035876 tx_episode_us_avg=54318
+   rearm_n=229 rearm_us_max=204 rearm_us_avg=18
+   spi_transactions=12392 spi_bytes=66453 spi_busy_ms=0 set_rx=729 set_tx=69 set_standby=227 set_sleep=636 set_mod_params=300 read_buffer=496 write_buffer=69
+   engine_calls=1248 enqueue_calls=600 engine_enqueue_overlaps=1 nested_same_thread=0 stop_errors=2
+   air_delivered=524 air_lost_not_in_rx=4107 dio1=586 hal_wakeups=1181 usp_passes=1248 usp_no_sleep=71 chip_mode=4
+== E_race_opt3_v100: env[] opt3_v100 race 4
+   race_rounds=147
+   rx_delivered=519 rx_confirms=146 rx_false_confirms=11 rx_dropped_ring=0
+   tx_done_ok=68 tx_failed=6 cfg_failed=8 change_deferred=0 reverts=0
+   handlers=791 handler_us_max=1039797 handler_us_avg=4407 queue_wait_us_max=41597 queue_overflow=0
+   rx_service_n=519 rx_service_us_max=40675 rx_service_us_avg=250
+   fifo_read_n=519 fifo_read_us_max=210 fifo_read_us_avg=95 rx_overwritten=42
+   tx_episode_n=74 tx_episode_us_max=1032253 tx_episode_us_avg=39666
+   rearm_n=240 rearm_us_max=137 rearm_us_avg=28
+   spi_transactions=12903 spi_bytes=69110 spi_busy_ms=0 set_rx=774 set_tx=68 set_standby=241 set_sleep=658 set_mod_params=310 read_buffer=519 write_buffer=68
+   engine_calls=1304 enqueue_calls=627 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=1
+   air_delivered=561 air_lost_not_in_rx=3313 dio1=627 hal_wakeups=1244 usp_passes=1304 usp_no_sleep=70 chip_mode=4
+== E_race_opt2_v100: env[] opt2_v100 race 4
+   race_rounds=959
+   rx_delivered=29 rx_confirms=7 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=138 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=1868 handler_us_max=52 handler_us_avg=1 queue_wait_us_max=76 queue_overflow=0
+   rx_service_n=29 rx_service_us_max=161 rx_service_us_avg=110
+   fifo_read_n=29 fifo_read_us_max=161 fifo_read_us_avg=110 rx_overwritten=4
+   tx_episode_n=138 tx_episode_us_max=35138 tx_episode_us_avg=28667
+   rearm_n=148 rearm_us_max=23 rearm_us_avg=1
+   spi_transactions=7573 spi_bytes=38008 spi_busy_ms=0 set_rx=177 set_tx=139 set_standby=287 set_sleep=287 set_mod_params=287 read_buffer=29 write_buffer=139
+   engine_calls=1014 enqueue_calls=287 engine_enqueue_overlaps=0 nested_same_thread=138 stop_errors=0
+   air_delivered=34 air_lost_not_in_rx=3779 dio1=167 hal_wakeups=453 usp_passes=1014 usp_no_sleep=0 chip_mode=3
+== E_race_opt1_v100_bare: env[SIM_PROTECT_MODE=0] opt1_v100 race 4
+   race_rounds=155
+   rx_delivered=566 rx_confirms=154 rx_false_confirms=6 rx_dropped_ring=0
+   tx_done_ok=78 tx_failed=0 cfg_failed=0 change_deferred=1 reverts=0
+   handlers=853 handler_us_max=1004045 handler_us_avg=4161 queue_wait_us_max=1004106 queue_overflow=0
+   rx_service_n=566 rx_service_us_max=199 rx_service_us_avg=90
+   fifo_read_n=566 fifo_read_us_max=171 fifo_read_us_avg=84 rx_overwritten=39
+   tx_episode_n=78 tx_episode_us_max=1037129 tx_episode_us_avg=38297
+   rearm_n=255 rearm_us_max=86 rearm_us_avg=16
+   spi_transactions=13959 spi_bytes=75028 spi_busy_ms=0 set_rx=833 set_tx=78 set_standby=255 set_sleep=706 set_mod_params=335 read_buffer=566 write_buffer=78
+   engine_calls=1413 enqueue_calls=669 engine_enqueue_overlaps=4 nested_same_thread=0 stop_errors=0
+   air_delivered=605 air_lost_not_in_rx=3385 dio1=674 hal_wakeups=1339 usp_passes=1413 usp_no_sleep=83 chip_mode=4
+== E_race_opt1_v121: env[] opt1_v121 race 4
+   race_rounds=153
+   rx_delivered=603 rx_confirms=152 rx_false_confirms=2 rx_dropped_ring=0
+   tx_done_ok=76 tx_failed=1 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=886 handler_us_max=1039415 handler_us_avg=3754 queue_wait_us_max=42819 queue_overflow=0
+   rx_service_n=603 rx_service_us_max=169 rx_service_us_avg=86
+   fifo_read_n=603 fifo_read_us_max=144 fifo_read_us_avg=80 rx_overwritten=46
+   tx_episode_n=77 tx_episode_us_max=1031854 tx_episode_us_avg=35757
+   rearm_n=252 rearm_us_max=52 rearm_us_avg=14
+   spi_transactions=14118 spi_bytes=76553 spi_busy_ms=0 set_rx=875 set_tx=76 set_standby=251 set_sleep=660 set_mod_params=331 read_buffer=603 write_buffer=76
+   engine_calls=11367464 enqueue_calls=661 engine_enqueue_overlaps=28 nested_same_thread=0 stop_errors=1
+   air_delivered=649 air_lost_not_in_rx=3155 dio1=707 hal_wakeups=1365 usp_passes=11367466 usp_no_sleep=11366574 chip_mode=4
+== F_busyloop_opt1_v100_t0: env[] opt1_v100 busyloop 2 0
+   busyloop_trigger=0 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=0 handler_us_max=0 handler_us_avg=0 queue_wait_us_max=0 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=0 rearm_us_max=0 rearm_us_avg=0
+   spi_transactions=54 spi_bytes=261 spi_busy_ms=0 set_rx=1 set_tx=0 set_standby=0 set_sleep=3 set_mod_params=2 read_buffer=0 write_buffer=0
+   engine_calls=3 enqueue_calls=3 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=2 usp_passes=3 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt2_v100_t0: env[] opt2_v100 busyloop 2 0
+   busyloop_trigger=0 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=0 handler_us_max=0 handler_us_avg=0 queue_wait_us_max=0 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=1 rearm_us_max=2 rearm_us_avg=2
+   spi_transactions=38 spi_bytes=189 spi_busy_ms=0 set_rx=1 set_tx=0 set_standby=1 set_sleep=1 set_mod_params=1 read_buffer=0 write_buffer=0
+   engine_calls=1 enqueue_calls=1 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=0 usp_passes=1 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt1_v100_t1: env[] opt1_v100 busyloop 2 1
+   busyloop_trigger=1 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=1 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=1 handler_us_max=0 handler_us_avg=0 queue_wait_us_max=3 queue_overflow=0
+   rx_service_n=1 rx_service_us_max=17216961135462248178 rx_service_us_avg=17216961135462248178
+   fifo_read_n=1 fifo_read_us_max=105 fifo_read_us_avg=105 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=0 rearm_us_max=0 rearm_us_avg=0
+   spi_transactions=63 spi_bytes=321 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=0 set_sleep=3 set_mod_params=2 read_buffer=1 write_buffer=0
+   engine_calls=4 enqueue_calls=3 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=1 air_lost_not_in_rx=0 dio1=1 hal_wakeups=3 usp_passes=4 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt2_v100_t1: env[] opt2_v100 busyloop 2 1
+   busyloop_trigger=1 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=1 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=1 handler_us_max=2 handler_us_avg=2 queue_wait_us_max=6 queue_overflow=0
+   rx_service_n=1 rx_service_us_max=17216961135462251309 rx_service_us_avg=17216961135462251309
+   fifo_read_n=1 fifo_read_us_max=111 fifo_read_us_avg=111 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=1 rearm_us_max=5 rearm_us_avg=5
+   spi_transactions=47 spi_bytes=249 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=1 set_sleep=1 set_mod_params=1 read_buffer=1 write_buffer=0
+   engine_calls=2 enqueue_calls=1 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=1 air_lost_not_in_rx=0 dio1=1 hal_wakeups=1 usp_passes=2 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt1_v100_t2: env[] opt1_v100 busyloop 2 2
+   busyloop_trigger=2 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=1 handler_us_max=19 handler_us_avg=19 queue_wait_us_max=5 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=1 rearm_us_max=9 rearm_us_avg=9
+   spi_transactions=80 spi_bytes=376 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=1 set_sleep=5 set_mod_params=3 read_buffer=0 write_buffer=0
+   engine_calls=5 enqueue_calls=5 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=4 usp_passes=5 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt2_v100_t2: env[] opt2_v100 busyloop 2 2
+   busyloop_trigger=2 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=2 handler_us_max=11 handler_us_avg=6 queue_wait_us_max=17 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=2 rearm_us_max=11 rearm_us_avg=7
+   spi_transactions=62 spi_bytes=298 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=2 set_sleep=2 set_mod_params=2 read_buffer=0 write_buffer=0
+   engine_calls=4 enqueue_calls=2 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=1 usp_passes=4 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt1_v121_t0: env[] opt1_v121 busyloop 2 0
+   busyloop_trigger=0 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=0 handler_us_max=0 handler_us_avg=0 queue_wait_us_max=0 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=0 rearm_us_max=0 rearm_us_avg=0
+   spi_transactions=54 spi_bytes=261 spi_busy_ms=0 set_rx=1 set_tx=0 set_standby=0 set_sleep=3 set_mod_params=2 read_buffer=0 write_buffer=0
+   engine_calls=3 enqueue_calls=3 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=2 usp_passes=3 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt2_v121_t0: env[] opt2_v121 busyloop 2 0
+   busyloop_trigger=0 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=0 handler_us_max=0 handler_us_avg=0 queue_wait_us_max=0 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=1 rearm_us_max=4 rearm_us_avg=4
+   spi_transactions=38 spi_bytes=189 spi_busy_ms=0 set_rx=1 set_tx=0 set_standby=1 set_sleep=1 set_mod_params=1 read_buffer=0 write_buffer=0
+   engine_calls=1 enqueue_calls=1 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=0 usp_passes=1 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt1_v121_t1: env[] opt1_v121 busyloop 2 1
+   busyloop_trigger=1 busyloop_secs=2 usp_passes_delta=16448795 usp_no_sleep_delta=16448796 cpu_seconds=1.998 cpu_pct=99.9
+   rx_delivered=1 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=1 handler_us_max=0 handler_us_avg=0 queue_wait_us_max=6 queue_overflow=0
+   rx_service_n=1 rx_service_us_max=17216961135462248181 rx_service_us_avg=17216961135462248181
+   fifo_read_n=1 fifo_read_us_max=87 fifo_read_us_avg=87 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=0 rearm_us_max=0 rearm_us_avg=0
+   spi_transactions=63 spi_bytes=321 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=0 set_sleep=3 set_mod_params=2 read_buffer=1 write_buffer=0
+   engine_calls=17284921 enqueue_calls=3 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=1 air_lost_not_in_rx=0 dio1=1 hal_wakeups=3 usp_passes=17284923 usp_no_sleep=17284920 chip_mode=4
+== F_busyloop_opt2_v121_t1: env[] opt2_v121 busyloop 2 1
+   busyloop_trigger=1 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=1 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=1 handler_us_max=2 handler_us_avg=2 queue_wait_us_max=3 queue_overflow=0
+   rx_service_n=1 rx_service_us_max=17216961135462251277 rx_service_us_avg=17216961135462251277
+   fifo_read_n=1 fifo_read_us_max=92 fifo_read_us_avg=92 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=1 rearm_us_max=2 rearm_us_avg=2
+   spi_transactions=47 spi_bytes=249 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=1 set_sleep=1 set_mod_params=1 read_buffer=1 write_buffer=0
+   engine_calls=2 enqueue_calls=1 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=1 air_lost_not_in_rx=0 dio1=1 hal_wakeups=1 usp_passes=2 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt1_v121_t2: env[] opt1_v121 busyloop 2 2
+   busyloop_trigger=2 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=1 handler_us_max=9 handler_us_avg=9 queue_wait_us_max=5 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=1 rearm_us_max=5 rearm_us_avg=5
+   spi_transactions=80 spi_bytes=376 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=1 set_sleep=5 set_mod_params=3 read_buffer=0 write_buffer=0
+   engine_calls=5 enqueue_calls=5 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=4 usp_passes=5 usp_no_sleep=0 chip_mode=4
+== F_busyloop_opt2_v121_t2: env[] opt2_v121 busyloop 2 2
+   busyloop_trigger=2 busyloop_secs=2 usp_passes_delta=0 usp_no_sleep_delta=0 cpu_seconds=0.000 cpu_pct=0.0
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=2 handler_us_max=3 handler_us_avg=1 queue_wait_us_max=3 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=2 rearm_us_max=3 rearm_us_avg=3
+   spi_transactions=62 spi_bytes=298 spi_busy_ms=0 set_rx=2 set_tx=0 set_standby=2 set_sleep=2 set_mod_params=2 read_buffer=0 write_buffer=0
+   engine_calls=4 enqueue_calls=2 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=0 hal_wakeups=1 usp_passes=4 usp_no_sleep=0 chip_mode=4
+== R_txcost_paced_opt1_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt1_v100 txcost 20 0
+   txcost_n=20 saturated=0 wall_ms=1525 per_frame_ms=76.27
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=20 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=20 handler_us_max=75678 handler_us_avg=69592 queue_wait_us_max=7 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=20 tx_episode_us_max=60995 tx_episode_us_avg=55144
+   rearm_n=20 rearm_us_max=7162 rearm_us_avg=7160
+   spi_transactions=1060 spi_bytes=9700 spi_busy_ms=620 set_rx=20 set_tx=20 set_standby=20 set_sleep=80 set_mod_params=40 read_buffer=0 write_buffer=20
+   engine_calls=123 enqueue_calls=83 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=20 hal_wakeups=102 usp_passes=123 usp_no_sleep=20 chip_mode=4
+== R_txcost_sat_opt1_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt1_v100 txcost 20 1
+   txcost_n=20 saturated=1 wall_ms=1221 per_frame_ms=61.06
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=20 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=20 handler_us_max=74791 handler_us_avg=58140 queue_wait_us_max=1505 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=20 tx_episode_us_max=61612 tx_episode_us_avg=57403
+   rearm_n=1 rearm_us_max=7160 rearm_us_avg=7160
+   spi_transactions=604 spi_bytes=7610 spi_busy_ms=487 set_rx=1 set_tx=20 set_standby=20 set_sleep=42 set_mod_params=21 read_buffer=0 write_buffer=20
+   engine_calls=85 enqueue_calls=45 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=20 hal_wakeups=64 usp_passes=85 usp_no_sleep=20 chip_mode=4
+== R_txcost_paced_opt2_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt2_v100 txcost 20 0
+   txcost_n=20 saturated=0 wall_ms=1274 per_frame_ms=63.74
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=20 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=80 handler_us_max=23685 handler_us_avg=7900 queue_wait_us_max=23681 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=20 tx_episode_us_max=66692 tx_episode_us_avg=62259
+   rearm_n=21 rearm_us_max=6593 rearm_us_avg=6591
+   spi_transactions=1020 spi_bytes=9560 spi_busy_ms=611 set_rx=20 set_tx=20 set_standby=40 set_sleep=40 set_mod_params=40 read_buffer=0 write_buffer=20
+   engine_calls=141 enqueue_calls=41 engine_enqueue_overlaps=0 nested_same_thread=20 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=20 hal_wakeups=60 usp_passes=141 usp_no_sleep=0 chip_mode=4
+== R_txcost_sat_opt2_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt2_v100 txcost 20 1
+   txcost_n=20 saturated=1 wall_ms=1256 per_frame_ms=62.81
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=20 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=80 handler_us_max=23680 handler_us_avg=7900 queue_wait_us_max=23676 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=20 tx_episode_us_max=66689 tx_episode_us_avg=61568
+   rearm_n=21 rearm_us_max=6593 rearm_us_avg=6591
+   spi_transactions=1020 spi_bytes=9560 spi_busy_ms=611 set_rx=20 set_tx=20 set_standby=40 set_sleep=40 set_mod_params=40 read_buffer=0 write_buffer=20
+   engine_calls=141 enqueue_calls=41 engine_enqueue_overlaps=0 nested_same_thread=20 stop_errors=0
+   air_delivered=0 air_lost_not_in_rx=0 dio1=20 hal_wakeups=60 usp_passes=141 usp_no_sleep=0 chip_mode=4
+== G_rxlat_idle_opt1_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt1_v100 rxlat 30 6 0
+   rxlat_period_ms=30 secs=6 tx_load=0
+   rx_delivered=171 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=176 handler_us_max=1 handler_us_avg=0 queue_wait_us_max=4619 queue_overflow=0
+   rx_service_n=171 rx_service_us_max=22886 rx_service_us_avg=18420
+   fifo_read_n=171 fifo_read_us_max=20085 fifo_read_us_avg=17971 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=0 rearm_us_max=0 rearm_us_avg=0
+   spi_transactions=1539 spi_bytes=49248 spi_busy_ms=3151 set_rx=171 set_tx=0 set_standby=0 set_sleep=0 set_mod_params=0 read_buffer=171 write_buffer=0
+   engine_calls=174 enqueue_calls=3 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=171 air_lost_not_in_rx=0 dio1=171 hal_wakeups=173 usp_passes=174 usp_no_sleep=0 chip_mode=4
+== G_rxlat_light_opt1_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt1_v100 rxlat 30 6 2
+   rxlat_period_ms=30 secs=6 tx_load=2
+   rx_delivered=99 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=32 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=144 handler_us_max=89283 handler_us_avg=17458 queue_wait_us_max=82474 queue_overflow=0
+   rx_service_n=99 rx_service_us_max=99030 rx_service_us_avg=28562
+   fifo_read_n=99 fifo_read_us_max=17996 fifo_read_us_avg=17944 rx_overwritten=2
+   tx_episode_n=32 tx_episode_us_max=79434 tx_episode_us_avg=64187
+   rearm_n=40 rearm_us_max=15706 rearm_us_avg=7390
+   spi_transactions=2835 spi_bytes=45552 spi_busy_ms=2915 set_rx=139 set_tx=32 set_standby=40 set_sleep=164 set_mod_params=72 read_buffer=99 write_buffer=32
+   engine_calls=314 enqueue_calls=147 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=101 air_lost_not_in_rx=71 dio1=133 hal_wakeups=279 usp_passes=314 usp_no_sleep=34 chip_mode=4
+== G_rxlat_saturated_opt1_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt1_v100 rxlat 30 6 1
+   rxlat_period_ms=30 secs=6 tx_load=1
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=101 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=152 handler_us_max=66968 handler_us_avg=41135 queue_wait_us_max=6252624 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=1
+   tx_episode_n=101 tx_episode_us_max=78848 tx_episode_us_avg=61758
+   rearm_n=47 rearm_us_max=15680 rearm_us_avg=7341
+   spi_transactions=4189 spi_bytes=44910 spi_busy_ms=2874 set_rx=47 set_tx=101 set_standby=147 set_sleep=316 set_mod_params=148 read_buffer=0 write_buffer=101
+   engine_calls=505 enqueue_calls=299 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=2 air_lost_not_in_rx=166 dio1=103 hal_wakeups=401 usp_passes=505 usp_no_sleep=103 chip_mode=4
+== G_rxlat_idle_opt2_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt2_v100 rxlat 30 6 0
+   rxlat_period_ms=30 secs=6 tx_load=0
+   rx_delivered=163 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=0 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=168 handler_us_max=18447 handler_us_avg=17884 queue_wait_us_max=16744 queue_overflow=0
+   rx_service_n=163 rx_service_us_max=18292 rx_service_us_avg=18261
+   fifo_read_n=163 fifo_read_us_max=17972 fifo_read_us_avg=17941 rx_overwritten=0
+   tx_episode_n=0 tx_episode_us_max=0 tx_episode_us_avg=0
+   rearm_n=1 rearm_us_max=6592 rearm_us_avg=6592
+   spi_transactions=1467 spi_bytes=46944 spi_busy_ms=3004 set_rx=163 set_tx=0 set_standby=0 set_sleep=0 set_mod_params=0 read_buffer=163 write_buffer=0
+   engine_calls=164 enqueue_calls=1 engine_enqueue_overlaps=0 nested_same_thread=0 stop_errors=0
+   air_delivered=163 air_lost_not_in_rx=0 dio1=163 hal_wakeups=163 usp_passes=164 usp_no_sleep=0 chip_mode=4
+== G_rxlat_light_opt2_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt2_v100 rxlat 30 6 2
+   rxlat_period_ms=30 secs=6 tx_load=2
+   rx_delivered=109 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=28 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=233 handler_us_max=33499 handler_us_avg=12576 queue_wait_us_max=33518 queue_overflow=0
+   rx_service_n=109 rx_service_us_max=18397 rx_service_us_avg=18271
+   fifo_read_n=109 fifo_read_us_max=18075 fifo_read_us_avg=17951 rx_overwritten=1
+   tx_episode_n=28 tx_episode_us_max=77196 tx_episode_us_avg=65288
+   rearm_n=29 rearm_us_max=6595 rearm_us_avg=6592
+   spi_transactions=2429 spi_bytes=45256 spi_busy_ms=2896 set_rx=137 set_tx=28 set_standby=56 set_sleep=66 set_mod_params=56 read_buffer=109 write_buffer=28
+   engine_calls=307 enqueue_calls=57 engine_enqueue_overlaps=0 nested_same_thread=28 stop_errors=0
+   air_delivered=110 air_lost_not_in_rx=55 dio1=138 hal_wakeups=194 usp_passes=307 usp_no_sleep=0 chip_mode=4
+== G_rxlat_saturated_opt2_v100: env[SIM_SPI_HZ=125000 SIM_TX_AIRTIME_MS=25] opt2_v100 rxlat 30 6 1
+   rxlat_period_ms=30 secs=6 tx_load=1
+   rx_delivered=0 rx_confirms=0 rx_false_confirms=0 rx_dropped_ring=0
+   tx_done_ok=92 tx_failed=0 cfg_failed=0 change_deferred=0 reverts=0
+   handlers=416 handler_us_max=33486 handler_us_avg=7282 queue_wait_us_max=33502 queue_overflow=0
+   rx_service_n=0 rx_service_us_max=0 rx_service_us_avg=0
+   fifo_read_n=0 fifo_read_us_max=0 fifo_read_us_avg=0 rx_overwritten=0
+   tx_episode_n=92 tx_episode_us_max=69920 tx_episode_us_avg=65696
+   rearm_n=93 rearm_us_max=6598 rearm_us_avg=6591
+   spi_transactions=4737 spi_bytes=45793 spi_busy_ms=2930 set_rx=92 set_tx=93 set_standby=185 set_sleep=195 set_mod_params=185 read_buffer=0 write_buffer=93
+   engine_calls=649 enqueue_calls=186 engine_enqueue_overlaps=0 nested_same_thread=92 stop_errors=0
+   air_delivered=1 air_lost_not_in_rx=162 dio1=93 hal_wakeups=278 usp_passes=649 usp_no_sleep=0 chip_mode=3
+== linecount: see linecount.txt
