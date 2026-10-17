@@ -1,0 +1,3 @@
+payload=  16 B  bits=  216  airtime_P5=  2.59 ms  (budget for kick latency = this)
+payload=  64 B  bits=  600  airtime_P5=  7.20 ms  (budget for kick latency = this)
+payload= 252 B  bits= 2104  airtime_P5= 25.25 ms  (budget for kick latency = this)

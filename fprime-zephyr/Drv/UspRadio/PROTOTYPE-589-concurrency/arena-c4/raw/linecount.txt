@@ -1,0 +1,7 @@
+option 1 (base, shipped):
+  UspRadio.cpp 395  RalSessionImpl.cpp 380  total 775
+option 2 (sketch, changed handlers + RalSessionSt):
+  single-queue/UspRadio.cpp 137  RalSessionSt.cpp+hpp 227  total 364
+  (sketch files contain only changed handlers; unchanged code not counted)
+option 3 (upstream-mutex diff, added+removed lines):
+  26 added, 20 removed

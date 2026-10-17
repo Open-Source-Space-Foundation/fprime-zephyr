@@ -1,0 +1,26 @@
+== S1 option 1 shipped order (stale ring frame after SET) ==
+  setRxProfile(P1, revert=30s)                    -> kApplyRx
+  stale frame (old P0 arm) delivered after SET   -> kConfirmRx
+  rx committed=P1 pending=0  tick(+31s) -> kNoOp  revertCount=0
+  RESULT: committed=P1  auto-revert DISARMED
+== S2 option 2 sketch order (stale frame harvested inside stop after SET) ==
+  setRxProfile(P1, revert=30s)                    -> kApplyRx
+  stale frame (old P0 arm) delivered after SET   -> kConfirmRx
+  rx committed=P1 pending=0  tick(+31s) -> kNoOp  revertCount=0
+  RESULT: committed=P1  auto-revert DISARMED
+== S3 control: stop before SET (stale frame before pending) ==
+  stale frame (old P0 arm, harvested before SET)  -> kNoOp
+  setRxProfile(P1, revert=30s)                    -> kApplyRx
+  rx committed=P0 pending=0  tick(+31s) -> kRevert  revertCount=1
+  RESULT: committed=P0  auto-revert fired
+== S4 control: genuine frame on new profile ==
+  setRxProfile(P1, revert=30s)                    -> kApplyRx
+  genuine frame on P1                            -> kConfirmRx
+  rx committed=P1 pending=0  tick(+31s) -> kNoOp  revertCount=0
+  RESULT: committed=P1  auto-revert DISARMED
+
+SUMMARY
+  S1 false confirm: YES, revert disarmed: yes
+  S2 false confirm: YES, revert disarmed: yes
+  S3 false confirm: no, revert fires:   yes
+  S4 confirm correct: yes

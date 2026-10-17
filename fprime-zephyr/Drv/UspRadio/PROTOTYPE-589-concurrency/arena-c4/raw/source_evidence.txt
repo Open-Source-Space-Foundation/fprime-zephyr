@@ -1,0 +1,41 @@
+## B: init failure leaves m_radio_id = RAC_INVALID_RADIO_ID; startReceive() reads tasks[] first
+/Users/ossf-1/GitHut/arena-589/c4/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp:70:      m_radio_id(RAC_INVALID_RADIO_ID),
+/Users/ossf-1/GitHut/arena-589/c4/fprime-zephyr/Drv/UspRadio/RalSessionImpl.cpp:109:    if (m_radio_id == RAC_INVALID_RADIO_ID) {
+/Users/ossf-1/GitHut/pcr-588/lib/zephyr-workspace/modules/lib/usp/smtc_rac_lib/smtc_rac/smtc_rac.h:41:#define RAC_INVALID_RADIO_ID 0xFF
+398:    while ((rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) &&
+403:    if (rp->tasks[m_radio_id].state != RP_TASK_STATE_FINISHED) {
+407:            ENQUEUE_READY_DEADLINE_MS, static_cast<int>(rp->tasks[m_radio_id].state));
+## E: smtc_rac_lock_radio_access has no protect call (v1.0.0 pinned)
+0
+## F: rp_get_irq_flag at v1.0.0 vs v1.2.1
+bool rp_get_irq_flag( void* obj )
+{
+    radio_planner_t* rp = ( ( radio_planner_t* ) obj );
+    if( ( rp->timer_irq_flag == true ) || ( rp->radio_irq_flag == true ) )
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+bool rp_get_irq_flag( void* obj )
+{
+    radio_planner_t* rp = ( ( radio_planner_t* ) obj );
+    if( ( rp->timer_irq_flag == true ) || ( rp->radio_irq_flag == true ) ||
+        ( rp->tasks[rp->radio_task_id].type == RP_TASK_TYPE_LOCK_RADIO_ACCESS ) )
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+## F: usp_zephyr loop (pinned fork): busy loop when irq flag pending
+120:            smtc_modem_hal_interruptible_msleep( K_MSEC( 50 ) );
+121:            continue;
+131:        if( smtc_rac_is_irq_flag_pending( ) )
+133:            continue;
+140:        smtc_modem_hal_interruptible_msleep( K_MSEC( sleep_time_ms ) );
