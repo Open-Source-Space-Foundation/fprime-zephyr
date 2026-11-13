@@ -79,18 +79,6 @@ module Zephyr {
         @ Last received SNR
         telemetry LastSnr: I8 update on change
 
-        @ Radio data rate telemetry
-        telemetry ModuleDataRate: Zephyr.LoRaDataRate
-
-        @ Radio coding rate telemetry
-        telemetry ModuleCodingRate: Zephyr.LoRaCodingRate
-
-        @ Radio bandwidth rate telemetry
-        telemetry ModuleBandwidth: Zephyr.LoRaBandwidth
-
-        @ Radio transmit state rate telemetry
-        telemetry ModuleTransmitState: Zephyr.TransmitState
-
         ###############################################################################
         # Standard AC Ports: Required for Channels, Events, Commands, and Parameters  #
         ###############################################################################
