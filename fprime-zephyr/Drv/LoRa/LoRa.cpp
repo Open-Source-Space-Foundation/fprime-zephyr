@@ -7,7 +7,12 @@
 #include "fprime-zephyr/Drv/LoRa/LoRa.hpp"
 #include "zephyr-config/LoRaCfg.hpp"
 #include <Fw/Logger/Logger.hpp>
+#include <zephyr/kernel.h>
 namespace Zephyr {
+
+// Extra time to wait, beyond the requested continuous-wave duration, for the
+// radio's TxTimeout handler to fire and release the modem before re-arming RX.
+static constexpr U32 CW_TEARDOWN_MARGIN_MS = 250;
 
 // Base configuration for the LoRa modem
 struct lora_modem_config BASE_CONFIG = {
@@ -70,6 +75,13 @@ LoRa::Status LoRa ::start(const struct device* lora_device, const TransmitState&
     if (transmit_enabled == TransmitState::ENABLED) {
         Fw::Success status = Fw::Success::SUCCESS;
         this->comStatusOut_out(0, status);
+
+        if (!this->m_lora_ever_on) {
+            this->m_lora_ever_on = true;
+            if (this->isConnected_loraFirstStart_OutputPort(0)) {
+                this->loraFirstStart_out(0);
+            }
+        }
     }
 
     return Status::SUCCESS;
@@ -182,6 +194,14 @@ void LoRa ::dataReturnIn_handler(FwIndexType portNum, Fw::Buffer& data, const Co
     this->deallocate_out(0, data);
 }
 
+void LoRa ::enableTransmit_handler(FwIndexType portNum) {
+    this->setTransmitState(TransmitState::ENABLED);
+}
+
+void LoRa ::disableTransmit_handler(FwIndexType portNum) {
+    this->setTransmitState(TransmitState::DISABLING);
+}
+
 void LoRa ::receive(U8* data, U16 size, I16 rssi, I8 snr) {
     FW_ASSERT(data != nullptr);
     const FwSizeType payload_size = static_cast<FwSizeType>(size - sizeof(LoRaConfig::HEADER));
@@ -204,36 +224,68 @@ void LoRa ::receive(U8* data, U16 size, I16 rssi, I8 snr) {
 // ----------------------------------------------------------------------
 
 void LoRa ::CONTINUOUS_WAVE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, U16 seconds) {
+    Os::ScopeLock lock(this->m_mutex);
     Status status = this->enableTx();
     if (status == Status::SUCCESS) {
-        lora_test_cw(this->m_lora_device, LoRaConfig::FREQUENCY, LoRaConfig::TX_POWER, seconds);
-        status = this->enableRx();
+        // lora_test_cw() is asynchronous: it acquires the modem and kicks off a
+        // continuous wave that transmits for `seconds`, returning immediately while
+        // the modem stays BUSY. The radio's TxTimeout handler releases the modem only
+        // when the CW finishes. Re-arming RX before that release races the still-BUSY
+        // modem and fails with -EBUSY, which (previously) left RX disarmed and wedged
+        // the modem for every later command until a board reset (issue #207). Block
+        // here until the CW completes so the modem is FREE before we re-enable RX.
+        int cw_status = lora_test_cw(this->m_lora_device, LoRaConfig::FREQUENCY, LoRaConfig::TX_POWER, seconds);
+        if (cw_status != 0) {
+            status = Status::ERROR;
+        } else {
+            k_sleep(K_MSEC(static_cast<U32>(seconds) * 1000U + CW_TEARDOWN_MARGIN_MS));
+        }
+    }
+    // Always re-arm RX, even on the TX/CW error path. A single failure must not be
+    // able to leave the modem without an active async receive, which is what forced a
+    // reset before (issue #207). enableRx() also recovers a modem left FREE by a prior
+    // failure, so one run of this handler heals a previously wedged radio.
+    Status rx_status = this->enableRx();
+    if (rx_status != Status::SUCCESS) {
+        this->log_WARNING_HI_ConfigurationFailed(LoRaMode::Receive);
+        if (status == Status::SUCCESS) {
+            status = rx_status;
+        }
     }
     this->cmdResponse_out(opCode, cmdSeq,
                           (status == Status::SUCCESS) ? Fw::CmdResponse::OK : Fw::CmdResponse::EXECUTION_ERROR);
 }
 
-void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, TransmitState enabled) {
+void LoRa ::setTransmitState(TransmitState state) {
     Os::ScopeLock lock(this->m_mutex);
     // Want to enable
-    if (enabled == TransmitState::ENABLED) {
+    if (state == TransmitState::ENABLED) {
         // Start the ping-pong protocol if we are disabled
-        if (this->m_transmit_enabled == TransmitState::DISABLED) {
-            // Must transition to ENABLED **BEFORE** calling comStatusOut
-            this->m_transmit_enabled = TransmitState::ENABLED;
+        const bool was_disabled = (this->m_transmit_enabled == TransmitState::DISABLED);
+        // Must transition to ENABLED **BEFORE** calling comStatusOut
+        this->m_transmit_enabled = TransmitState::ENABLED;
+        if (was_disabled) {
             Fw::Success comStatus = Fw::Success::SUCCESS;
             this->comStatusOut_out(0, comStatus);
         }
-        // Set ENABLED for all other cases
-        this->m_transmit_enabled = TransmitState::ENABLED;
+        if (!this->m_lora_ever_on) {
+            this->m_lora_ever_on = true;
+            if (this->isConnected_loraFirstStart_OutputPort(0)) {
+                this->loraFirstStart_out(0);
+            }
+        }
     }
     // Want to disable
     else {
-        // If not already diabled, then the ping-pong protocol should be stopped and thus we go to DISABLING state
+        // If not already disabled, then the ping-pong protocol should be stopped and thus we go to DISABLING state
         if (this->m_transmit_enabled != TransmitState::DISABLED) {
             this->m_transmit_enabled = TransmitState::DISABLING;
         }
     }
+}
+
+void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, const TransmitState& enabled) {
+    this->setTransmitState(enabled);
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
 }  // namespace Zephyr
