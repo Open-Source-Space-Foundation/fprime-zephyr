@@ -27,6 +27,23 @@ struct lora_modem_config BASE_CONFIG = {
     .public_network = false,
 };
 
+namespace {
+
+LinkProfile getLinkProfile(const struct lora_modem_config& config) {
+    if (config.bandwidth != BW_125_KHZ || config.coding_rate != CR_4_5) {
+        return LinkProfile::Unknown;
+    }
+    if (config.datarate == SF_8) {
+        return LinkProfile::P0_LORA_SF8;
+    }
+    if (config.datarate == SF_10) {
+        return LinkProfile::P1_LORA_SF10;
+    }
+    return LinkProfile::Unknown;
+}
+
+}  // namespace
+
 // ----------------------------------------------------------------------
 // Component construction and destruction
 // ----------------------------------------------------------------------
@@ -90,6 +107,9 @@ LoRa::Status LoRa ::enableTx() {
 
         status = lora_config(this->m_lora_device, &BASE_CONFIG);
     }
+    if (status == 0) {
+        this->tlmWrite_LoRaProfile(getLinkProfile(BASE_CONFIG));
+    }
     return (status < 0) ? Status::ERROR : Status::SUCCESS;
 }
 
@@ -120,6 +140,9 @@ LoRa::Status LoRa ::enableRx(bool initial) {
     int status = lora_config(this->m_lora_device, &BASE_CONFIG);
     if (status == 0) {
         status = lora_recv_async(this->m_lora_device, LoRa::receiveCallback, this);
+    }
+    if (status == 0) {
+        this->tlmWrite_LoRaProfile(getLinkProfile(BASE_CONFIG));
     }
     return (status < 0) ? Status::ERROR : Status::SUCCESS;
 }

@@ -24,6 +24,11 @@ module Zephyr {
         Transmit,
         Receive
     }
+    enum LinkProfile : U8 {
+        Unknown = 0
+        P0_LORA_SF8 = 1
+        P1_LORA_SF10 = 2
+    }
     enum TransmitState : U8 {
         ENABLED,
         DISABLED,
@@ -80,6 +85,8 @@ module Zephyr {
         @ Last received SNR
         telemetry LastSnr: I8 update on change
 
+        @ Applied link profile; Unknown means the settings do not match a supported profile
+        telemetry LoRaProfile: LinkProfile update on change
         @ Enable LoRa transmission
         sync input port enableTransmit: Fw.Signal
 
