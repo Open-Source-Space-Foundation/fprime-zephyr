@@ -61,6 +61,12 @@ class LoRa final : public LoRaComponentBase {
                               Fw::Buffer& data,
                               const ComCfg::FrameContext& context) override;
 
+    //! Handler implementation for enableTransmit
+    void enableTransmit_handler(FwIndexType portNum) override;
+
+    //! Handler implementation for disableTransmit
+    void disableTransmit_handler(FwIndexType portNum) override;
+
   private:
     // ----------------------------------------------------------------------
     // Handler implementations for commands
@@ -80,6 +86,9 @@ class LoRa final : public LoRaComponentBase {
                              U32 cmdSeq,           //!< The command sequence number
                              TransmitState enabled) override;
 
+    //! Set the transmit state for commands and input ports
+    void setTransmitState(TransmitState state);
+
   private:
     U8 m_send_buffer[LoRa::MAX_PACKET_SIZE];  //!< Buffer for sending data (max LoRa packet size)
     //! Process received data
@@ -94,6 +103,7 @@ class LoRa final : public LoRaComponentBase {
     const struct device* m_lora_device;
     Zephyr::TransmitState m_transmit_enabled;  //!< Transmit enabled state
     Os::Mutex m_mutex;  //!< Mutex for thread safety
+    bool m_lora_ever_on = false;  //!< Latched true after transmit is first enabled
 
     FwSizeType m_bytes_sent = 0;     //!< Total bytes sent telemetry
     FwSizeType m_bytes_received = 0; //!< Total bytes received telemetry

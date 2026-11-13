@@ -70,6 +70,12 @@ LoRa::Status LoRa ::start(const struct device* lora_device, const TransmitState&
     if (transmit_enabled == TransmitState::ENABLED) {
         Fw::Success status = Fw::Success::SUCCESS;
         this->comStatusOut_out(0, status);
+        if (!this->m_lora_ever_on) {
+            this->m_lora_ever_on = true;
+            if (this->isConnected_loraFirstStart_OutputPort(0)) {
+                this->loraFirstStart_out(0);
+            }
+        }
     }
 
     return Status::SUCCESS;
@@ -182,6 +188,14 @@ void LoRa ::dataReturnIn_handler(FwIndexType portNum, Fw::Buffer& data, const Co
     this->deallocate_out(0, data);
 }
 
+void LoRa ::enableTransmit_handler(FwIndexType portNum) {
+    this->setTransmitState(TransmitState::ENABLED);
+}
+
+void LoRa ::disableTransmit_handler(FwIndexType portNum) {
+    this->setTransmitState(TransmitState::DISABLING);
+}
+
 void LoRa ::receive(U8* data, U16 size, I16 rssi, I8 snr) {
     FW_ASSERT(data != nullptr);
     const FwSizeType payload_size = static_cast<FwSizeType>(size - sizeof(LoRaConfig::HEADER));
@@ -214,9 +228,14 @@ void LoRa ::CONTINUOUS_WAVE_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, U16 seco
 }
 
 void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, TransmitState enabled) {
+    this->setTransmitState(enabled);
+    this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
+}
+
+void LoRa ::setTransmitState(TransmitState state) {
     Os::ScopeLock lock(this->m_mutex);
     // Want to enable
-    if (enabled == TransmitState::ENABLED) {
+    if (state == TransmitState::ENABLED) {
         // Start the ping-pong protocol if we are disabled
         if (this->m_transmit_enabled == TransmitState::DISABLED) {
             // Must transition to ENABLED **BEFORE** calling comStatusOut
@@ -226,6 +245,12 @@ void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, TransmitState e
         }
         // Set ENABLED for all other cases
         this->m_transmit_enabled = TransmitState::ENABLED;
+        if (!this->m_lora_ever_on) {
+            this->m_lora_ever_on = true;
+            if (this->isConnected_loraFirstStart_OutputPort(0)) {
+                this->loraFirstStart_out(0);
+            }
+        }
     }
     // Want to disable
     else {
@@ -234,6 +259,5 @@ void LoRa ::TRANSMIT_cmdHandler(FwOpcodeType opCode, U32 cmdSeq, TransmitState e
             this->m_transmit_enabled = TransmitState::DISABLING;
         }
     }
-    this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
 }  // namespace Zephyr

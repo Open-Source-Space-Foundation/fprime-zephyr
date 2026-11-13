@@ -84,6 +84,15 @@ module Zephyr {
         @ Last received SNR
         telemetry LastSnr: I8 update on change
 
+        @ Enable LoRa transmission
+        sync input port enableTransmit: Fw.Signal
+
+        @ Disable LoRa transmission
+        sync input port disableTransmit: Fw.Signal
+
+        @ Emitted once when LoRa transmit is first enabled
+        output port loraFirstStart: Fw.Signal
+
         @ Applied link profile; Unknown means the settings do not match a supported profile
         telemetry LoRaProfile: LinkProfile update on change
 
